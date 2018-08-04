@@ -69,20 +69,24 @@ void MediaPlayerControl::setPosition(qint64 position)
 
 int MediaPlayerControl::volume() const
 {
-    return 0;
+    return vol_;
 }
 
 void MediaPlayerControl::setVolume(int volume)
 {
+    vol_ = volume;
+    player_.setVolume(float(volume)/100.0f);
 }
 
 bool MediaPlayerControl::isMuted() const
 {
-    return false;
+    return mute_;
 }
 
 void MediaPlayerControl::setMuted(bool muted)
 {
+    mute_ = muted;
+    player_.setMute(muted);
 }
 
 int MediaPlayerControl::bufferStatus() const
@@ -92,12 +96,12 @@ int MediaPlayerControl::bufferStatus() const
 
 bool MediaPlayerControl::isAudioAvailable() const
 {
-    return true;
+    return has_a_;
 }
 
 bool MediaPlayerControl::isVideoAvailable() const
 {
-    return true;
+    return has_v_;
 }
 
 bool MediaPlayerControl::isSeekable() const

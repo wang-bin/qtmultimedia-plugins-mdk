@@ -41,6 +41,8 @@ public:
 private:
     bool has_a_ = true;
     bool has_v_ = true;
+    bool mute_ = false;
+    int vol_ = 100;
     int64_t duration_ = 0;
     Player player_;
 };

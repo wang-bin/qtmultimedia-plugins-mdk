@@ -11,7 +11,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 
-class VideoWidget : public QOpenGLWidget, public QOpenGLFunctions
+class VideoWidget : public QOpenGLWidget, protected QOpenGLFunctions
 {
 public:
     VideoWidget(QWidget *parent = nullptr) : QOpenGLWidget(parent) {}
@@ -74,26 +74,24 @@ void VideoWidgetControl::setFullScreen(bool fullScreen)
 
 Qt::AspectRatioMode VideoWidgetControl::aspectRatioMode() const
 {
-    return Qt::IgnoreAspectRatio;
+    return am_;
+}
+
+static float fromQt(Qt::AspectRatioMode value)
+{
+    switch (value) {
+    case Qt::IgnoreAspectRatio: return IgnoreAspectRatio;
+    case Qt::KeepAspectRatioByExpanding: return KeepAspectRatioCrop;
+    case Qt::KeepAspectRatio: return KeepAspectRatio;
+    default: return KeepAspectRatio;
+    }
 }
 
 void VideoWidgetControl::setAspectRatioMode(Qt::AspectRatioMode mode)
 {
     am_ = mode;
     // mpc_ is set internally & never null
-    float a;
-    switch (mode) {
-    case Qt::IgnoreAspectRatio:
-        a = IgnoreAspectRatio;
-        break;
-    case Qt::KeepAspectRatioByExpanding:
-        a = KeepAspectRatioCrop;
-        break;
-    default:
-        a = KeepAspectRatio;
-        break;
-    }
-    mpc_->player()->setAspectRatio(a);
+    mpc_->player()->setAspectRatio(fromQt(mode));
 }
 
 int VideoWidgetControl::brightness() const
@@ -114,7 +112,8 @@ void VideoWidgetControl::setContrast(int contrast)
 {
 }
 
-int VideoWidgetControl::hue() const {
+int VideoWidgetControl::hue() const
+{
     return 0;
 }
 
