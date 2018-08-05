@@ -51,10 +51,12 @@ private:
     Player* player_ = nullptr;
 };
 
-VideoWidgetControl::VideoWidgetControl(QObject* parent)
+VideoWidgetControl::VideoWidgetControl(MediaPlayerControl* player, QObject* parent)
     : QVideoWidgetControl(parent)
     , vw_(new VideoWidget())
+    , mpc_(player)
 {
+    vw_->setSource(mpc_->player());
 }
 
 VideoWidgetControl::~VideoWidgetControl()
@@ -133,10 +135,4 @@ void VideoWidgetControl::setSaturation(int saturation)
 QWidget* VideoWidgetControl::videoWidget()
 {
     return vw_;
-}
-
-void VideoWidgetControl::setSource(MediaPlayerControl* player)
-{
-    mpc_ = player;
-    vw_->setSource(mpc_->player());
 }

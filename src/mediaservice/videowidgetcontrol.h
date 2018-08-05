@@ -11,7 +11,7 @@ class VideoWidget;
 class VideoWidgetControl : public QVideoWidgetControl {
     Q_OBJECT
 public:
-    explicit VideoWidgetControl(QObject* parent = nullptr);
+    explicit VideoWidgetControl(MediaPlayerControl* player, QObject* parent = nullptr);
     ~VideoWidgetControl() override;
 
     bool isFullScreen() const override;
@@ -27,8 +27,6 @@ public:
     int saturation() const override;
     void setSaturation(int saturation) override;
     QWidget* videoWidget() override;
-
-    void setSource(MediaPlayerControl* player);
 private:
     bool fs_ = false;
     Qt::AspectRatioMode am_ = Qt::KeepAspectRatio;

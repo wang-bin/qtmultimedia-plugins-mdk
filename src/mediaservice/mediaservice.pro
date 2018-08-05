@@ -23,11 +23,13 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         mediaplayerservice.cpp \
         mediaplayercontrol.cpp \
+        renderercontrol.cpp \
         plugin.cpp
 
 HEADERS += \
         mediaplayerservice.h \
         mediaplayercontrol.h \
+        renderercontrol.h \
         plugin.h
 
 qtHaveModule(widgets) {

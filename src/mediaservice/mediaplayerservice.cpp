@@ -6,7 +6,10 @@
  */
 #include "mediaplayerservice.h"
 #include "mediaplayercontrol.h"
+#include "renderercontrol.h"
+#ifdef QT_MULTIMEDIAWIDGETS_LIB
 #include "videowidgetcontrol.h"
+#endif //QT_MULTIMEDIAWIDGETS_LIB
 
 MediaPlayerService::MediaPlayerService(QObject* parent)
     : QMediaService(parent)
@@ -19,12 +22,11 @@ QMediaControl* MediaPlayerService::requestControl(const char* name)
 {
     if (qstrcmp(name, QMediaPlayerControl_iid) == 0)
         return mpc_;
+    if (qstrcmp(name, QVideoRendererControl_iid) == 0)
+        return new RendererControl(mpc_, this);
 #ifdef QT_MULTIMEDIAWIDGETS_LIB
-    if (qstrcmp(name, QVideoWidgetControl_iid) == 0) {
-        auto vwc = new VideoWidgetControl(this);
-        vwc->setSource(mpc_);
-        return vwc;
-    }
+    if (qstrcmp(name, QVideoWidgetControl_iid) == 0)
+        return new VideoWidgetControl(mpc_, this);
 #endif //QT_MULTIMEDIAWIDGETS_LIB
     qWarning("MediaPlayerService: unsupported control: %s", qPrintable(name));
     return nullptr;
