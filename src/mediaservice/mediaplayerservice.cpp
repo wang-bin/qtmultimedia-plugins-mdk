@@ -20,6 +20,7 @@ MediaPlayerService::MediaPlayerService(QObject* parent)
 
 QMediaControl* MediaPlayerService::requestControl(const char* name)
 {
+    qInfo("requestControl %s", name);
     if (qstrcmp(name, QMediaPlayerControl_iid) == 0)
         return mpc_;
     if (qstrcmp(name, QVideoRendererControl_iid) == 0)
@@ -32,7 +33,10 @@ QMediaControl* MediaPlayerService::requestControl(const char* name)
     return nullptr;
 }
 
-void MediaPlayerService::releaseControl(QMediaControl*)
+void MediaPlayerService::releaseControl(QMediaControl* control)
 {
-    qInfo("release control...");
+    qInfo() << "release control " << control;
+    delete control;
+    if (control == mpc_)
+        mpc_ = nullptr;
 }
