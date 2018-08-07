@@ -23,12 +23,14 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         mediaplayerservice.cpp \
         mediaplayercontrol.cpp \
+        metadatareadercontrol.cpp \
         renderercontrol.cpp \
         plugin.cpp
 
 HEADERS += \
         mediaplayerservice.h \
         mediaplayercontrol.h \
+        metadatareadercontrol.h \
         renderercontrol.h \
         plugin.h
 

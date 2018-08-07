@@ -6,6 +6,7 @@
  */
 #include "mediaplayerservice.h"
 #include "mediaplayercontrol.h"
+#include "metadatareadercontrol.h"
 #include "renderercontrol.h"
 #ifdef QT_MULTIMEDIAWIDGETS_LIB
 #include "videowidgetcontrol.h"
@@ -21,6 +22,8 @@ MediaPlayerService::MediaPlayerService(QObject* parent)
 QMediaControl* MediaPlayerService::requestControl(const char* name)
 {
     qInfo("requestControl %s", name);
+    if (qstrcmp(name, QMetaDataReaderControl_iid) == 0) // requested when constructing QMediaObject(QMediaPlayer)
+        return new MetaDataReaderControl(mpc_);
     if (qstrcmp(name, QMediaPlayerControl_iid) == 0)
         return mpc_;
     if (qstrcmp(name, QVideoRendererControl_iid) == 0)
