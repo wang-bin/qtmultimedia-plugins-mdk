@@ -18,7 +18,7 @@ public:
 
     void setSource(Player* player) {
         player_ = player;
-        player_->setRenderCallback([this]{ update(); });
+        player_->setRenderCallback([this](void*){ update(); });
     }
 
 protected:
