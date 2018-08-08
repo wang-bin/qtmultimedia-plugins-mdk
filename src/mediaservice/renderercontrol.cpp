@@ -11,8 +11,12 @@
 #include "mdk/VideoFrame.h"
 #include <QAbstractVideoBuffer>
 #include <QAbstractVideoSurface>
+#include <QVideoFrame>
 #include <QVideoSurfaceFormat>
-#include <iostream>
+#include <QImage>
+#include <QOpenGLFramebufferObject>
+#include <QOpenGLFunctions>
+#include <QOpenGLContext>
 
 static QVideoFrame::PixelFormat toQt(PixelFormat fmt) {
     switch (fmt) {
@@ -65,17 +69,75 @@ private:
     MapMode mode_ = NotMapped;
     VideoFrame frame_;
 };
-/*
-// TODO: qtmultimedia only support packed rgb gltexture handle, so offscreen rendering may be required
-class HWVideoBuffer final: public QAbstractVideoBuffer {
+
+// qtmultimedia only support packed rgb gltexture handle, so offscreen rendering may be required
+class FBOVideoBuffer final : public QAbstractVideoBuffer {
 public:
-    HWVideoBuffer(NativeVideoBufferRef b) : QAbstractVideoBuffer(GLTextureHandle) {}
+    FBOVideoBuffer(Player* player, QOpenGLFramebufferObject** fbo, int width, int height) : QAbstractVideoBuffer(GLTextureHandle)
+        , w_(width), h_(height)
+        , player_(player)
+        , fbo_(fbo)
+    {}
+
+    MapMode mapMode() const override { return mode_; }
+
+    uchar *map(MapMode mode, int *numBytes, int *bytesPerLine) override {
+        if (mode_ == mode)
+            return img_.bits();
+        if (mode & WriteOnly)
+            return nullptr;
+        mode_ = mode;
+        renderToFbo();
+        img_ = (*fbo_)->toImage(false);
+        if (numBytes)
+            *numBytes = img_.byteCount();
+        if (bytesPerLine)
+            *bytesPerLine = img_.bytesPerLine();
+        return img_.bits();
+    }
+
+    void unmap() override {
+        mode_ = NotMapped;
+    }
+
+// current context is not null!
+    QVariant handle() const override {
+        auto that = const_cast<FBOVideoBuffer*>(this);
+        that->renderToFbo();
+        return (*fbo_)->texture();
+    }
+
+private:
+    void renderToFbo() {
+        auto f = QOpenGLContext::currentContext()->functions();
+        GLint prevFbo = 0;
+        f->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+        auto fbo = *fbo_;
+        if (!fbo || fbo->size() != QSize(w_, h_)) {
+            player_->scale(1.0f, -1.0f); // flip y in fbo
+            player_->setVideoSurfaceSize(w_, h_);
+            delete fbo;
+            fbo = new QOpenGLFramebufferObject(w_, h_);
+            *fbo_ = fbo;
+        }
+        fbo->bind();
+        player_->renderVideo();
+        f->glBindFramebuffer(GL_FRAMEBUFFER, prevFbo);
+    }
+private:
+    MapMode mode_ = NotMapped;
+    int w_;
+    int h_;
+    Player* player_;
+    QOpenGLFramebufferObject** fbo_ = nullptr;
+    QImage img_;
 };
-*/
+
 RendererControl::RendererControl(MediaPlayerControl* player, QObject* parent) : QVideoRendererControl(parent)
     , mpc_(player)
 {
     mpc_ = player;
+    connect(mpc_, &MediaPlayerControl::frameAvailable, this, &RendererControl::onFrameAvailable);
 }
 
 QAbstractVideoSurface* RendererControl::surface() const
@@ -89,34 +151,37 @@ void RendererControl::setSurface(QAbstractVideoSurface* surface)
         surface_->stop();
     surface_ = surface;
     if (!surface) {
-        mpc_->player()->setRenderCallback(nullptr);
+        mpc_->player()->setRenderCallback(nullptr); // surfcace is set to null before destroy, avoid invokeMethod() on invalid this
         return;
     }
-    mpc_->player()->setRenderCallback([this]{
-        mpc_->player()->renderVideo(); // required to get frame
-        VideoFrame v;
-        mpc_->player()->getVideoFrame(&v);
-        if (!v)
-            return;
-        // surface()->isFormatSupported()
-        if (v.nativeBuffer()) {
-            // offscreen rendering if necessary. rgb.
-        } else {
-            frame_ = QVideoFrame(new HostVideoBuffer(v), QSize(v.width(), v.height()), toQt(v.format().format()));
-        }
-        QMetaObject::invokeMethod(this, "presentInUIThread", Qt::AutoConnection);
-    });
-    const QSize r = surface->nativeResolution();
+    //const QSize r = surface->nativeResolution(); // may be (-1, -1)
     // mdk player needs a vo. add before delivering a video frame
-    mpc_->player()->setVideoSurfaceSize(r.width(), r.height());
-    // connect(nativeResolutionChanged) // not important
+    mpc_->player()->setVideoSurfaceSize(1,1);//r.width(), r.height());
 }
 
-void RendererControl::presentInUIThread()
+void RendererControl::onFrameAvailable()
 {
+    if (!surface_)
+        return;
+    if (QOpenGLContext::currentContext()) // redraw scheduled, set surface size etc.
+        return;
+    mpc_->player()->renderVideo(); // required to get frame
+    VideoFrame v;
+    mpc_->player()->getVideoFrame(&v);
+    if (!v)
+        return;
+    //mpc_->player()->setVideoSurfaceSize(v.width(), v.height()); // call update callback again, recursively
+    // if (!surface()->isFormatSupported()): offscreen rendering
+    QVideoFrame frame;
+    if (v.nativeBuffer()) {
+        frame = QVideoFrame(new FBOVideoBuffer(mpc_->player(), &fbo_, v.width(), v.height()), QSize(v.width(), v.height()), QVideoFrame::Format_BGR32); // RGB32 for qimage
+        // offscreen rendering if necessary. rgb.
+    } else {
+        frame = QVideoFrame(new HostVideoBuffer(v), QSize(v.width(), v.height()), toQt(v.format().format()));
+    }
     if (!surface_->isActive()) { // || surfaceFormat()!=
-        QVideoSurfaceFormat format(frame_.size(), frame_.pixelFormat(), frame_.handleType());
+        QVideoSurfaceFormat format(frame.size(), frame.pixelFormat(), frame.handleType());
         surface_->start(format);
     }
-    surface_->present(frame_);
+    surface_->present(frame); // main thread
 }

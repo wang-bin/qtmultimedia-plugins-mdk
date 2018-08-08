@@ -6,8 +6,9 @@
  */
 #pragma once
 #include <QVideoRendererControl>
-#include <QVideoFrame>
+
 class MediaPlayerControl;
+class QOpenGLFramebufferObject;
 class RendererControl : public QVideoRendererControl
 {
     Q_OBJECT
@@ -18,9 +19,9 @@ public:
 
     void setSource();
 public Q_SLOTS:
-    void presentInUIThread();
+    void onFrameAvailable();
 private:
     QAbstractVideoSurface* surface_ = nullptr;
     MediaPlayerControl* mpc_ = nullptr;
-    QVideoFrame frame_;
+    QOpenGLFramebufferObject *fbo_ = nullptr;
 };
