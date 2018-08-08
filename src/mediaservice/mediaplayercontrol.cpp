@@ -47,9 +47,10 @@ MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(pa
         Q_EMIT mediaStatusChanged(toQt(value));
         return true;
     });
-    // setRenderCallback([this](void*){ // emit signal
+    player_.setRenderCallback([this](void*){
+        Q_EMIT frameAvailable();
+    });
 }
-
 
 QMediaPlayer::State MediaPlayerControl::state() const
 {

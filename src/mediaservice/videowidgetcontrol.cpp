@@ -18,7 +18,6 @@ public:
 
     void setSource(Player* player) {
         player_ = player;
-        player_->setRenderCallback([this](void*){ update(); });
     }
 
 protected:
@@ -57,6 +56,8 @@ VideoWidgetControl::VideoWidgetControl(MediaPlayerControl* player, QObject* pare
     , mpc_(player)
 {
     vw_->setSource(mpc_->player());
+    //connect(mpc_, &MediaPlayerControl::frameAvailable, vw_, &VideoWidget::update, Qt::DirectConnection);
+    connect(mpc_, SIGNAL(frameAvailable()), vw_, SLOT(update()), Qt::DirectConnection);
 }
 
 VideoWidgetControl::~VideoWidgetControl()

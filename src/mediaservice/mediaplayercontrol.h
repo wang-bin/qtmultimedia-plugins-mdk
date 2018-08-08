@@ -37,7 +37,8 @@ public:
     void play() override;
     void pause() override;
     void stop() override;
-
+Q_SIGNALS:
+    void frameAvailable();
 private:
     bool has_a_ = true;
     bool has_v_ = true;
