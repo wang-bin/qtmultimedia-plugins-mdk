@@ -21,8 +21,8 @@ void MetaDataReaderControl::readMetaData()
     using namespace QMediaMetaData;
     const auto& info = mpc_->player()->mediaInfo();
     QVariantMap m;
-    m[Size] = info.size;
-    m[Duration] = info.duration;
+    m[Size] = (qint64)info.size;
+    m[Duration] = (qint64)info.duration;
     m[QMediaMetaData::MediaType] = info.video.empty() ? "audio" : "video"; // FIXME: album cover image can be a video stream
 
     if (!info.metadata.empty()) { // TODO: metadata update

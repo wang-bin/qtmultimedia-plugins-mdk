@@ -163,8 +163,6 @@ void RendererControl::onFrameAvailable()
 {
     if (!surface_)
         return;
-    if (QOpenGLContext::currentContext()) // redraw scheduled, set surface size etc.
-        return;
     mpc_->player()->renderVideo(); // required to get frame
     VideoFrame v;
     mpc_->player()->getVideoFrame(&v);
