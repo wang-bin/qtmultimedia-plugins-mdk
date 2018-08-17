@@ -168,14 +168,12 @@ void RendererControl::onFrameAvailable()
     mpc_->player()->getVideoFrame(&v);
     if (!v)
         return;
-    //mpc_->player()->setVideoSurfaceSize(v.width(), v.height()); // call update callback again, recursively
-    // if (!surface()->isFormatSupported()): offscreen rendering
     QVideoFrame frame;
-    if (v.nativeBuffer()) {
+    const auto& qfmt = toQt(v.format().format());
+    if (v.nativeBuffer() || !surface_->isFormatSupported(QVideoSurfaceFormat(QSize(v.width(), v.height()), qfmt))) {
         frame = QVideoFrame(new FBOVideoBuffer(mpc_->player(), &fbo_, v.width(), v.height()), QSize(v.width(), v.height()), QVideoFrame::Format_BGR32); // RGB32 for qimage
-        // offscreen rendering if necessary. rgb.
     } else {
-        frame = QVideoFrame(new HostVideoBuffer(v), QSize(v.width(), v.height()), toQt(v.format().format()));
+        frame = QVideoFrame(new HostVideoBuffer(v), QSize(v.width(), v.height()), qfmt);
     }
     if (!surface_->isActive()) { // || surfaceFormat()!=
         QVideoSurfaceFormat format(frame.size(), frame.pixelFormat(), frame.handleType());
