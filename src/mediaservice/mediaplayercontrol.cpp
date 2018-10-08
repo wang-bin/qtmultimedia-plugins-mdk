@@ -12,6 +12,7 @@ static QMediaPlayer::State toQt(State value) {
         case State::Paused: return QMediaPlayer::PausedState;
         case State::Stopped: return QMediaPlayer::StoppedState;
     }
+    return QMediaPlayer::StoppedState;
 }
 
 // TODO: mask value&xxx
@@ -126,11 +127,12 @@ QMediaTimeRange MediaPlayerControl::availablePlaybackRanges() const
 
 qreal MediaPlayerControl::playbackRate() const
 {
-    return 1.0;
+    return qreal(player_.playbackRate());
 }
 
 void MediaPlayerControl::setPlaybackRate(qreal rate)
 {
+    player_.setPlaybackRate(float(rate));
 }
 
 QMediaContent MediaPlayerControl::media() const
@@ -155,6 +157,7 @@ void MediaPlayerControl::setMedia(const QMediaContent& media, QIODevice*)
     Q_EMIT positionChanged(0);
     player_.waitFor(State::Stopped);
     player_.prepare(0, [this](int64_t position, bool*){
+        Q_UNUSED(position)
         const auto& info = player_.mediaInfo();
         duration_ = info.duration;
         has_a_ = !info.audio.empty();
