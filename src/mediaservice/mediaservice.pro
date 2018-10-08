@@ -69,3 +69,7 @@ PLUGIN_CLASS_NAME = MDKPlugin
 load(qt_plugin)
 
 OTHER_FILES += mdk_mediaservice.json
+
+# rtti is disabled in mdk
+QMAKE_CXXFLAGS += -fno-rtti #-fno-omit-frame-pointer -fsanitize=address,undefined
+QMAKE_LFLAGS += -fno-rtti #-fno-omit-frame-pointer -fsanitize=address,undefined
