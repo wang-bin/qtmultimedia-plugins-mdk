@@ -132,7 +132,12 @@ qreal MediaPlayerControl::playbackRate() const
 
 void MediaPlayerControl::setPlaybackRate(qreal rate)
 {
+    const auto old = playbackRate();
+    if (playbackRate() == rate)
+        return;
     player_.setPlaybackRate(float(rate));
+    if (playbackRate() != old) // success
+        Q_EMIT playbackRateChanged(playbackRate());
 }
 
 QMediaContent MediaPlayerControl::media() const
