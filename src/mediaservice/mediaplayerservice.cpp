@@ -4,6 +4,7 @@
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  */
+#include "iodevice.h"
 #include "mediaplayerservice.h"
 #include "mediaplayercontrol.h"
 #include "metadatareadercontrol.h"
@@ -16,6 +17,7 @@ MediaPlayerService::MediaPlayerService(QObject* parent)
     : QMediaService(parent)
     , mpc_(new MediaPlayerControl(parent))
 {
+    QMediaIO::registerOnce();
     qInfo("create service...");
 }
 

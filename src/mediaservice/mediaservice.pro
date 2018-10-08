@@ -3,7 +3,7 @@
 # Project created by QtCreator 2018-08-02T16:34:29
 #
 #-------------------------------------------------
-
+CONFIG -= silent
 QT       += multimedia
 qtHaveModule(widgets): QT += multimediawidgets
 
@@ -21,6 +21,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+        iodevice.cpp \
         mediaplayerservice.cpp \
         mediaplayercontrol.cpp \
         metadatareadercontrol.cpp \
@@ -28,6 +29,7 @@ SOURCES += \
         plugin.cpp
 
 HEADERS += \
+        iodevice.h \
         mediaplayerservice.h \
         mediaplayercontrol.h \
         metadatareadercontrol.h \

@@ -150,14 +150,17 @@ const QIODevice* MediaPlayerControl::mediaStream() const
     return nullptr;
 }
 
-void MediaPlayerControl::setMedia(const QMediaContent& media, QIODevice*)
+void MediaPlayerControl::setMedia(const QMediaContent& media, QIODevice* io)
 {
-    // TODO: iodevice object to url "qiodevice:"
     stop();
-    if (media.canonicalUrl().isLocalFile())
-        player_.setMedia(media.canonicalUrl().toLocalFile().toUtf8().constData()); // for windows
-    else
-        player_.setMedia(media.canonicalUrl().url().toUtf8().constData());
+    if (io) {
+        player_.setMedia(QString("qio:%1").arg(qintptr(io)).toUtf8().constData());
+    } else {
+        if (media.canonicalUrl().isLocalFile())
+            player_.setMedia(media.canonicalUrl().toLocalFile().toUtf8().constData()); // for windows
+        else
+            player_.setMedia(media.canonicalUrl().url().toUtf8().constData());
+    }
 
     Q_EMIT positionChanged(0);
     player_.waitFor(State::Stopped);
