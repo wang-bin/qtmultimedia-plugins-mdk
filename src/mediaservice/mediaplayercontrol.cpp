@@ -18,29 +18,28 @@ static QMediaPlayer::State toQt(State value) {
 // TODO: mask value&xxx
 static QMediaPlayer::MediaStatus toQt(MediaStatus value) {
     switch (value) {
-        case MediaStatus::UnknownMediaStatus: return QMediaPlayer::UnknownMediaStatus;
         case MediaStatus::NoMedia: return QMediaPlayer::NoMedia;
-        case MediaStatus::InvalidMedia: return QMediaPlayer::InvalidMedia;
+        case MediaStatus::Invalid: return QMediaPlayer::InvalidMedia;
         default: break;
     }
-    if (test_flag(value & MediaStatus::LoadingMedia))
+    if (test_flag(value & MediaStatus::Loading))
         return QMediaPlayer::LoadingMedia;
-    if (test_flag(value & MediaStatus::StalledMedia))
+    if (test_flag(value & MediaStatus::Stalled))
         return QMediaPlayer::StalledMedia;
-    if (test_flag(value & MediaStatus::BufferingMedia))
+    if (test_flag(value & MediaStatus::Buffering))
         return QMediaPlayer::BufferingMedia;
-    if (test_flag(value & MediaStatus::BufferedMedia))
+    if (test_flag(value & MediaStatus::Buffered))
         return QMediaPlayer::BufferedMedia; // playing or paused
-    if (test_flag(value & MediaStatus::EndOfMedia))
+    if (test_flag(value & MediaStatus::End))
         return QMediaPlayer::EndOfMedia; // playback complete
-    if (test_flag(value & MediaStatus::LoadedMedia))
+    if (test_flag(value & MediaStatus::Loaded))
         return QMediaPlayer::LoadedMedia; // connected, stopped. so last
     return QMediaPlayer::UnknownMediaStatus;
 }
 
 MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(parent)
 {
-    //player_.setVideoDecoders({"VideoToolbox", "FFmpeg"}); // no display for 2nd video
+    player_.setVideoDecoders({"VideoToolbox", "FFmpeg"}); // no display for 2nd video
     player_.onStateChanged([this](State value){
         Q_EMIT stateChanged(toQt(value));
     });
