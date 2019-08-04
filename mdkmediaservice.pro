@@ -55,4 +55,4 @@ mac {
     }
 }
 
-OTHER_FILES += mdkmediaserviceplugin.json
+OTHER_FILES += mdkmediaservice.json
