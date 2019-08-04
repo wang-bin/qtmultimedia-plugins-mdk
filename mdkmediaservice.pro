@@ -2,7 +2,8 @@ QT += multimedia
 qtHaveModule(widgets): QT += multimediawidgets
 
 # rtti is disabled in mdk
-CONFIG += rtti_off c++17
+CONFIG += rtti_off c++1z c++17
+gcc:isEmpty(QMAKE_CXXFLAGS_RTTI_ON): QMAKE_CXXFLAGS += -fno-rtti
 
 QTDIR_build {
     # This is only for the Qt build. Do not use externally. We mean it.
