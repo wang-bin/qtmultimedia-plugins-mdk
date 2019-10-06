@@ -1,5 +1,12 @@
+/*
+ * Copyright (C) 2018-2019 Wang Bin - wbsecg1 at gmail.com
+ * https://github.com/wang-bin/qtmultimedia-plugins-mdk
+ * MIT License
+ */
 #pragma once
 // qio: qrc: etc
+#include "mdk/global.h"
+#ifdef MDK_ABI
 #include "mdk/MediaIO.h"
 #include <QIODevice>
 using namespace MDK_NS;
@@ -48,4 +55,4 @@ private:
     bool owns_io_ = true;
     QIODevice* io_ = nullptr;
 };
-
+#endif //MDK_ABI

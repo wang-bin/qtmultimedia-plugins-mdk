@@ -42,7 +42,7 @@ qtHaveModule(widgets) {
 INCLUDEPATH += $$PWD/mdk-sdk/include
 macx {
     QMAKE_CXXFLAGS += -F$$PWD/mdk-sdk/lib -F/usr/local/lib
-    LIBS += -F/usr/local/lib -framework mdk
+    LIBS += -F$$PWD/mdk-sdk/lib -F/usr/local/lib -framework mdk
 } else {
     LIBS += -L$$PWD/mdk-sdk/lib -L$$[QT_INSTALL_LIBS] -lmdk
 }

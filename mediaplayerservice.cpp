@@ -1,6 +1,6 @@
 
 /*
- * Copyright (C) 2018 Wang Bin - wbsecg1 at gmail.com
+ * Copyright (C) 2018-2019 Wang Bin - wbsecg1 at gmail.com
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  */
@@ -17,7 +17,9 @@ MediaPlayerService::MediaPlayerService(QObject* parent)
     : QMediaService(parent)
     , mpc_(new MediaPlayerControl(parent))
 {
+#ifdef MDK_ABI
     QMediaIO::registerOnce();
+#endif // MDK_ABI
     qInfo("create service...");
 }
 

@@ -1,4 +1,10 @@
+/*
+ * Copyright (C) 2018-2019 Wang Bin - wbsecg1 at gmail.com
+ * https://github.com/wang-bin/qtmultimedia-plugins-mdk
+ * MIT License
+ */
 #include "iodevice.h"
+#ifdef MDK_ABI
 #include <QFile>
 #include <QtDebug>
 
@@ -57,3 +63,4 @@ bool QMediaIO::seek(int64_t offset, int from)
         p += size(); // offset < 0
     return io_->seek(p);
 }
+#endif // MDK_ABI

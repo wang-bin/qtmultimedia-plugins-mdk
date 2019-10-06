@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Wang Bin - wbsecg1 at gmail.com
+ * Copyright (C) 2018-2019 Wang Bin - wbsecg1 at gmail.com
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  */
@@ -8,7 +8,6 @@
 // move to mdk public NativeVideoBuffer::fromTexture()
 #include "renderercontrol.h"
 #include "mediaplayercontrol.h"
-#include "mdk/VideoFrame.h"
 #include <QAbstractVideoBuffer>
 #include <QAbstractVideoSurface>
 #include <QVideoFrame>
@@ -18,6 +17,8 @@
 #include <QOpenGLFunctions>
 #include <QOpenGLContext>
 
+#ifdef MDK_ABI
+# include "mdk/VideoFrame.h"
 static QVideoFrame::PixelFormat toQt(PixelFormat fmt) {
     switch (fmt) {
     case PixelFormat::YUV420P: return QVideoFrame::Format_YUV420P;
@@ -69,6 +70,7 @@ private:
     MapMode mode_ = NotMapped;
     VideoFrame frame_;
 };
+#endif // MDK_ABI
 
 // qtmultimedia only support packed rgb gltexture handle, so offscreen rendering may be required
 class FBOVideoBuffer final : public QAbstractVideoBuffer {
@@ -157,24 +159,46 @@ void RendererControl::setSurface(QAbstractVideoSurface* surface)
     //const QSize r = surface->nativeResolution(); // may be (-1, -1)
     // mdk player needs a vo. add before delivering a video frame
     mpc_->player()->setVideoSurfaceSize(1,1);//r.width(), r.height());
+
+    if (!mpc_->player()->mediaInfo().video.empty()) {
+        auto& c = mpc_->player()->mediaInfo().video[0].codec;
+        video_w_ = c.width;
+        video_h_ = c.height;
+    }
+
+    mpc_->player()->onMediaStatusChanged([this](MediaStatus s){
+        if (flags_added(status_, s, MediaStatus::Loaded)) {
+            if (!mpc_->player()->mediaInfo().video.empty()) {
+                auto& c = mpc_->player()->mediaInfo().video[0].codec;
+                video_w_ = c.width;
+                video_h_ = c.height;
+            }
+        }
+        status_ = s;
+        return true;
+    });
 }
 
 void RendererControl::onFrameAvailable()
 {
     if (!surface_)
         return;
+#ifdef MDK_ABI
     mpc_->player()->renderVideo(); // required to get frame
     VideoFrame v;
     mpc_->player()->getVideoFrame(&v);
     if (!v)
         return;
-    QVideoFrame frame;
     const auto& qfmt = toQt(v.format().format());
+    QVideoFrame frame;
     if (v.nativeBuffer() || !surface_->isFormatSupported(QVideoSurfaceFormat(QSize(v.width(), v.height()), qfmt))) {
         frame = QVideoFrame(new FBOVideoBuffer(mpc_->player(), &fbo_, v.width(), v.height()), QSize(v.width(), v.height()), QVideoFrame::Format_BGR32); // RGB32 for qimage
     } else {
         frame = QVideoFrame(new HostVideoBuffer(v), QSize(v.width(), v.height()), qfmt);
     }
+#else
+    QVideoFrame frame(new FBOVideoBuffer(mpc_->player(), &fbo_, video_w_, video_h_), QSize(video_w_, video_h_), QVideoFrame::Format_BGR32); // RGB32 for qimage
+#endif // MDK_ABI
     if (!surface_->isActive()) { // || surfaceFormat()!=
         QVideoSurfaceFormat format(frame.size(), frame.pixelFormat(), frame.handleType());
         surface_->start(format);

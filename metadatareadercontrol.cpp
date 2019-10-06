@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Wang Bin - wbsecg1 at gmail.com
+ * Copyright (C) 2018-2019 Wang Bin - wbsecg1 at gmail.com
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  */
@@ -73,7 +73,7 @@ void MetaDataReaderControl::readMetaData()
     if (!info.audio.empty()) {
         const auto& p = info.audio[0].codec;
         m[AudioBitRate] = (int)p.bit_rate;
-        m[AudioCodec] = p.codec.data();
+        m[AudioCodec] = QString::fromStdString(p.codec);
         //m[AverageLevel]
         m[ChannelCount] = p.channels;
         m[SampleRate] = p.sample_rate;
@@ -83,7 +83,7 @@ void MetaDataReaderControl::readMetaData()
         const auto& p = info.video[0].codec;
         m[VideoFrameRate] = qreal(p.frame_rate);
         m[VideoBitRate] = (int)p.bit_rate;
-        m[VideoCodec] = p.codec.data();
+        m[VideoCodec] = QString::fromStdString(p.codec);
         m[Resolution] = QSize(p.width, p.height);
         // PixelAspectRatio
     }
