@@ -39,7 +39,7 @@ static QMediaPlayer::MediaStatus toQt(MediaStatus value) {
 
 MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(parent)
 {
-    player_.setVideoDecoders({"VideoToolbox", "FFmpeg"}); // no display for 2nd video
+    player_.setVideoDecoders({"D3D11", "VideoToolbox", "VAAPI", "FFmpeg"}); // no display for 2nd video
     player_.onStateChanged([this](State value){
         Q_EMIT stateChanged(toQt(value));
     });
@@ -173,6 +173,11 @@ void MediaPlayerControl::setMedia(const QMediaContent& media, QIODevice* io)
         Q_EMIT audioAvailableChanged(has_a_);
         Q_EMIT videoAvailableChanged(has_v_);
         Q_EMIT seekableChanged(true);
+#if defined(MDK_VERSION_CHECK)
+# if MDK_VERSION_CHECK(0, 5, 0)
+        return true;
+# endif
+#endif
     });
 }
 
