@@ -8,6 +8,7 @@
 // move to mdk public NativeVideoBuffer::fromTexture()
 #include "renderercontrol.h"
 #include "mediaplayercontrol.h"
+#include "mdk/MediaInfo.h"
 #include <QAbstractVideoBuffer>
 #include <QAbstractVideoSurface>
 #include <QVideoFrame>
@@ -197,6 +198,8 @@ void RendererControl::onFrameAvailable()
         frame = QVideoFrame(new HostVideoBuffer(v), QSize(v.width(), v.height()), qfmt);
     }
 #else
+    if (video_w_ <= 0 || video_h_ <= 0)
+        return; // not playing, e.g. when stop() is called there is also a frameAvailable signal to update renderer which is required by mdk internally. if create fbo with an invalid size anyway, qt gl rendering will be broken forever
     QVideoFrame frame(new FBOVideoBuffer(mpc_->player(), &fbo_, video_w_, video_h_), QSize(video_w_, video_h_), QVideoFrame::Format_BGR32); // RGB32 for qimage
 #endif // MDK_ABI
     if (!surface_->isActive()) { // || surfaceFormat()!=
