@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Wang Bin - wbsecg1 at gmail.com
+ * Copyright (C) 2018-2020 Wang Bin - wbsecg1 at gmail.com
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  */
@@ -46,6 +46,15 @@ MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(pa
     player_.onMediaStatusChanged([this](MediaStatus value){
         Q_EMIT mediaStatusChanged(toQt(value));
         return true;
+    });
+    player_.onEvent([this](const MediaEvent& e){
+        if (e.error < 0) {
+            if (e.category == "decoder.audio"
+                || e.category == "decoder.video") {
+                Q_EMIT error(QMediaPlayer::FormatError, tr("Unsupported media, a codec is missing."));
+            }
+        }
+        return false;
     });
     player_.setRenderCallback([this](void*){
         Q_EMIT frameAvailable();
@@ -164,7 +173,9 @@ void MediaPlayerControl::setMedia(const QMediaContent& media, QIODevice* io)
     Q_EMIT positionChanged(0);
     player_.waitFor(State::Stopped);
     player_.prepare(0, [this](int64_t position, bool*){
-        Q_UNUSED(position)
+        if (position < 0) {
+            Q_EMIT error(QMediaPlayer::ResourceError, tr("Failed to load source."));
+        }
         const auto& info = player_.mediaInfo();
         duration_ = info.duration;
         has_a_ = !info.audio.empty();
@@ -172,7 +183,7 @@ void MediaPlayerControl::setMedia(const QMediaContent& media, QIODevice* io)
         Q_EMIT durationChanged(duration_);
         Q_EMIT audioAvailableChanged(has_a_);
         Q_EMIT videoAvailableChanged(has_v_);
-        Q_EMIT seekableChanged(true);
+        Q_EMIT seekableChanged(position >= 0);
 #if defined(MDK_VERSION_CHECK)
 # if MDK_VERSION_CHECK(0, 5, 0)
         return true;
