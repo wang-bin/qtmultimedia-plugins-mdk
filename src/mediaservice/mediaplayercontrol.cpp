@@ -14,24 +14,32 @@ static QMediaPlayer::State toQt(State value) {
     }
 }
 
+// TODO: mask value&xxx
 static QMediaPlayer::MediaStatus toQt(MediaStatus value) {
     switch (value) {
         case MediaStatus::UnknownMediaStatus: return QMediaPlayer::UnknownMediaStatus;
         case MediaStatus::NoMedia: return QMediaPlayer::NoMedia;
-        case MediaStatus::LoadingMedia: return QMediaPlayer::LoadingMedia;
-        case MediaStatus::LoadedMedia: return QMediaPlayer::LoadedMedia;
-        case MediaStatus::StalledMedia: return QMediaPlayer::StalledMedia;
-        case MediaStatus::BufferingMedia: return QMediaPlayer::BufferingMedia;
-        case MediaStatus::BufferedMedia: return QMediaPlayer::BufferedMedia;
-        case MediaStatus::EndOfMedia: return QMediaPlayer::EndOfMedia;
         case MediaStatus::InvalidMedia: return QMediaPlayer::InvalidMedia;
-        default: return QMediaPlayer::UnknownMediaStatus;
+        default: break;
     }
+    if (test_flag(value & MediaStatus::LoadingMedia))
+        return QMediaPlayer::LoadingMedia;
+    if (test_flag(value & MediaStatus::StalledMedia))
+        return QMediaPlayer::StalledMedia;
+    if (test_flag(value & MediaStatus::BufferingMedia))
+        return QMediaPlayer::BufferingMedia;
+    if (test_flag(value & MediaStatus::BufferedMedia))
+        return QMediaPlayer::BufferedMedia; // playing or paused
+    if (test_flag(value & MediaStatus::EndOfMedia))
+        return QMediaPlayer::EndOfMedia; // playback complete
+    if (test_flag(value & MediaStatus::LoadedMedia))
+        return QMediaPlayer::LoadedMedia; // connected, stopped. so last
+    return QMediaPlayer::UnknownMediaStatus;
 }
 
 MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(parent)
 {
-    //player_.setVideoDecoders({"VideoToolbox", "FFmpeg"});
+    //player_.setVideoDecoders({"VideoToolbox", "FFmpeg"}); // no display for 2nd video
     player_.onStateChanged([this](State value){
         Q_EMIT stateChanged(toQt(value));
     });
@@ -39,6 +47,7 @@ MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(pa
         Q_EMIT mediaStatusChanged(toQt(value));
         return true;
     });
+    // setRenderCallback([this](void*){ // emit signal
 }
 
 
@@ -137,7 +146,11 @@ void MediaPlayerControl::setMedia(const QMediaContent& media, QIODevice*)
 {
     // TODO: iodevice object to url "qiodevice:"
     stop();
-    player_.setMedia(media.canonicalUrl().url().toUtf8().constData());
+    if (media.canonicalUrl().isLocalFile())
+        player_.setMedia(media.canonicalUrl().toLocalFile().toUtf8().constData()); // for windows
+    else
+        player_.setMedia(media.canonicalUrl().url().toUtf8().constData());
+
     Q_EMIT positionChanged(0);
     player_.waitFor(State::Stopped);
     player_.prepare(0, [this](int64_t position, bool*){
