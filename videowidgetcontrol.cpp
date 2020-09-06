@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Wang Bin - wbsecg1 at gmail.com
+ * Copyright (C) 2018-2020 Wang Bin - wbsecg1 at gmail.com
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  */
@@ -97,40 +97,32 @@ void VideoWidgetControl::setAspectRatioMode(Qt::AspectRatioMode mode)
     mpc_->player()->setAspectRatio(fromQt(mode));
 }
 
-int VideoWidgetControl::brightness() const
-{
-    return 0;
-}
-
 void VideoWidgetControl::setBrightness(int brightness)
 {
-}
-
-int VideoWidgetControl::contrast() const
-{
-    return 0;
+    brightness_ = brightness;
+    float v = float(brightness)/100.0f;
+    mpc_->player()->set(VideoEffect::Brightness, v);
 }
 
 void VideoWidgetControl::setContrast(int contrast)
 {
-}
-
-int VideoWidgetControl::hue() const
-{
-    return 0;
+    contrast_ = contrast;
+    float v = float(contrast)/100.0f;
+    mpc_->player()->set(VideoEffect::Contrast, v);
 }
 
 void VideoWidgetControl::setHue(int hue)
 {
-}
-
-int VideoWidgetControl::saturation() const
-{
-    return 0;
+    hue_ = hue;
+    float v = float(hue)/100.0f;
+    mpc_->player()->set(VideoEffect::Hue, v);
 }
 
 void VideoWidgetControl::setSaturation(int saturation)
 {
+    saturation_ = saturation;
+    float v = float(saturation)/100.0f;
+    mpc_->player()->set(VideoEffect::Saturation, v);
 }
 
 QWidget* VideoWidgetControl::videoWidget()
