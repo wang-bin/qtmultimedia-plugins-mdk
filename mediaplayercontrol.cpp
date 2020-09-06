@@ -39,7 +39,17 @@ static QMediaPlayer::MediaStatus toQt(MediaStatus value) {
 
 MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(parent)
 {
-    player_.setVideoDecoders({"D3D11", "VideoToolbox", "VAAPI", "FFmpeg"}); // no display for 2nd video
+    player_.setVideoDecoders({
+#if defined(Q_OS_WIN)
+                                 "MFT:d3d=11", "MFT:d3d=9", "D3D11",
+#elif defined(Q_OS_DARWIN)
+                                 "VT", "VideoToolbox",
+#elif defined(Q_OS_ANDROID)
+                                 "AMediaCodec:java=0:async=1",
+#elif defined(Q_OS_LINUX)
+                                 "VAAPI", "VDPAU",
+#endif
+                                 "CUDA", "FFmpeg"}); // no display for 2nd video
     player_.onStateChanged([this](State value){
         Q_EMIT stateChanged(toQt(value));
     });
