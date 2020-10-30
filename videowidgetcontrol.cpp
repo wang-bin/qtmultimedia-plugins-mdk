@@ -56,8 +56,8 @@ VideoWidgetControl::VideoWidgetControl(MediaPlayerControl* player, QObject* pare
     , mpc_(player)
 {
     vw_->setSource(mpc_->player());
-    //connect(mpc_, &MediaPlayerControl::frameAvailable, vw_, &VideoWidget::update, Qt::DirectConnection);
-    connect(mpc_, SIGNAL(frameAvailable()), vw_, SLOT(update()), Qt::DirectConnection);
+    //connect(mpc_, &MediaPlayerControl::frameAvailable, vw_, &VideoWidget::update, Qt::QueuedConnection);
+    connect(mpc_, SIGNAL(frameAvailable()), vw_, SLOT(update()), Qt::QueuedConnection);
 }
 
 VideoWidgetControl::~VideoWidgetControl()
