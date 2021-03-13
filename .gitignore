@@ -1,3 +1,6 @@
+mdk-sdk/
+out/
+
 # C++ objects and libs
 *.slo
 *.lo

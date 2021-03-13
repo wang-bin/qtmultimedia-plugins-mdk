@@ -15,6 +15,7 @@ Multimedia plugins are looked up in alphabetical order, so mdk plugin may be not
 - Build and install. In QtCreator you can add a **Make** step with ***Make arguments: install***. Then plugin and mdk runtime files will be automatically installed to Qt dir
 - Try an Qt multimedia example
 
+>> Note: mdk-sdk-apple.tar.xz contains xcframework which is not supported yet in this project, use mdk-sdk-macOS.tar.xz or mdk-sdk-iOS.tar.xz instead
+
 ## Issues
-- Android install dir is different, you may need to copy so files manually to `plugins/mediaservice`,  `libmdk.so` and `libffmpeg.so` to `lib`
 - Qt for android adds abi suffix to shared libraries to support muliti abi, libmdk has no such suffix

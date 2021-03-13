@@ -5,7 +5,7 @@ qtHaveModule(widgets): QT += multimediawidgets
 CONFIG += rtti_off c++1z c++17
 gcc:isEmpty(QMAKE_CXXFLAGS_RTTI_ON): QMAKE_CXXFLAGS += -fno-rtti
 
-# or use CONFIG+=qt_plugin and add .qmake.config with PLUGIN_TYPE PLUGIN_CLASS_NAME, but error "Could not find feature stack-protector-strong"
+# or use CONFIG+=qt_plugin and add .qmake.config with PLUGIN_TYPE PLUGIN_CLASS_NAME, but error "Could not find feature stack-protector-strong". can be fixed by `load(qt_build_config)`
 QTDIR_build {
     # This is only for the Qt build. Do not use externally. We mean it.
     PLUGIN_TYPE = mediaservice
@@ -14,7 +14,8 @@ QTDIR_build {
 } else {
     TARGET = $$qtLibraryTarget(mdkmediaservice)
     TEMPLATE = lib
-    CONFIG += plugin #qt_plugin
+    load(qt_build_config) # see https://github.com/CrimsonAS/gtkplatform/issues/20#issuecomment-331722270
+    CONFIG += plugin qt_plugin
     target.path = $$[QT_INSTALL_PLUGINS]/mediaservice
     INSTALLS += target
 }
