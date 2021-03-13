@@ -5,6 +5,7 @@ qtHaveModule(widgets): QT += multimediawidgets
 CONFIG += rtti_off c++1z c++17
 gcc:isEmpty(QMAKE_CXXFLAGS_RTTI_ON): QMAKE_CXXFLAGS += -fno-rtti
 
+# or use CONFIG+=qt_plugin and add .qmake.config with PLUGIN_TYPE PLUGIN_CLASS_NAME, but error "Could not find feature stack-protector-strong"
 QTDIR_build {
     # This is only for the Qt build. Do not use externally. We mean it.
     PLUGIN_TYPE = mediaservice
@@ -13,7 +14,7 @@ QTDIR_build {
 } else {
     TARGET = $$qtLibraryTarget(mdkmediaservice)
     TEMPLATE = lib
-    CONFIG += plugin
+    CONFIG += plugin #qt_plugin
     target.path = $$[QT_INSTALL_PLUGINS]/mediaservice
     INSTALLS += target
 }
@@ -43,17 +44,21 @@ OTHER_FILES += mdkmediaservice.json
 
 ######## MDK SDK ##########
 MDK_SDK = $$PWD/mdk-sdk
+!exists("$$MDK_SDK"): error("Extract mdk-sdk in project dir $$PWD first! Download: https://sourceforge.net/projects/mdk-sdk/files/nightly")
+
 INCLUDEPATH += $$MDK_SDK/include
 contains(QT_ARCH, x.*64) {
   android: MDK_ARCH = x86_64
+  else:linux: MDK_ARCH = amd64
   else: MDK_ARCH = x64
 } else:contains(QT_ARCH, .*86) {
   MDK_ARCH = x86
-} else:contains(QT_ARCH, a.*64) {
+} else:contains(QT_ARCH, a.*64.*) {
   android: MDK_ARCH = arm64-v8a
   else: MDK_ARCH = arm64
 } else:contains(QT_ARCH, arm.*) {
   android: MDK_ARCH = armeabi-v7a
+  else:linux: MDK_ARCH = armhf
   else: MDK_ARCH = arm
 }
 
@@ -84,4 +89,3 @@ mac {
         QMAKE_LFLAGS *= \'$${QMAKE_LFLAGS_RPATH}$$R\'
     }
 }
-
