@@ -36,7 +36,7 @@ protected:
     void resizeGL(int w, int h) override {
         if (!player_)
             return;
-        player_->setVideoSurfaceSize(w, h);
+        player_->setVideoSurfaceSize(w * devicePixelRatio(), h * devicePixelRatio());
     }
 
     void paintGL() override {
@@ -44,7 +44,7 @@ protected:
             return;
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        player_->renderVideo();
+        player_->renderVideo(); // context
     }
 private:
     Player* player_ = nullptr;
