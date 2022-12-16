@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2020 Wang Bin - wbsecg1 at gmail.com
+ * Copyright (C) 2018-2022 Wang Bin - wbsecg1 at gmail.com
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  */
@@ -7,7 +7,6 @@
 #include "mediaplayercontrol.h"
 #include <QOpenGLWidget>
 #include <QCoreApplication>
-#include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 
@@ -23,20 +22,17 @@ public:
 protected:
     void initializeGL() override {
         initializeOpenGLFunctions();
-        auto ctx = context();
-        connect(context(), &QOpenGLContext::aboutToBeDestroyed, [ctx]{
-            QOffscreenSurface s;
-            s.create();
-            ctx->makeCurrent(&s);
+        connect(context(), &QOpenGLContext::aboutToBeDestroyed, [this]{
+            makeCurrent();
             Player::foreignGLContextDestroyed();
-            ctx->doneCurrent();
+            doneCurrent();
         });
     }
 
     void resizeGL(int w, int h) override {
         if (!player_)
             return;
-        player_->setVideoSurfaceSize(w * devicePixelRatio(), h * devicePixelRatio());
+        player_->setVideoSurfaceSize(w * devicePixelRatio(), h * devicePixelRatio(), this);
     }
 
     void paintGL() override {
@@ -44,7 +40,7 @@ protected:
             return;
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        player_->renderVideo(); // context
+        player_->renderVideo(this);
     }
 private:
     Player* player_ = nullptr;
@@ -94,35 +90,35 @@ void VideoWidgetControl::setAspectRatioMode(Qt::AspectRatioMode mode)
 {
     am_ = mode;
     // mpc_ is set internally & never null
-    mpc_->player()->setAspectRatio(fromQt(mode));
+    mpc_->player()->setAspectRatio(fromQt(mode), vw_);
 }
 
 void VideoWidgetControl::setBrightness(int brightness)
 {
     brightness_ = brightness;
     float v = float(brightness)/100.0f;
-    mpc_->player()->set(VideoEffect::Brightness, v);
+    mpc_->player()->set(VideoEffect::Brightness, v, vw_);
 }
 
 void VideoWidgetControl::setContrast(int contrast)
 {
     contrast_ = contrast;
     float v = float(contrast)/100.0f;
-    mpc_->player()->set(VideoEffect::Contrast, v);
+    mpc_->player()->set(VideoEffect::Contrast, v, vw_);
 }
 
 void VideoWidgetControl::setHue(int hue)
 {
     hue_ = hue;
     float v = float(hue)/100.0f;
-    mpc_->player()->set(VideoEffect::Hue, v);
+    mpc_->player()->set(VideoEffect::Hue, v, vw_);
 }
 
 void VideoWidgetControl::setSaturation(int saturation)
 {
     saturation_ = saturation;
     float v = float(saturation)/100.0f;
-    mpc_->player()->set(VideoEffect::Saturation, v);
+    mpc_->player()->set(VideoEffect::Saturation, v, vw_);
 }
 
 QWidget* VideoWidgetControl::videoWidget()
