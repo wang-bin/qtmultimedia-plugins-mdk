@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2020 Wang Bin - wbsecg1 at gmail.com
+ * Copyright (C) 2018-2023 Wang Bin - wbsecg1 at gmail.com
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  */
@@ -41,15 +41,16 @@ MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(pa
 {
     player_.setVideoDecoders({
 #if defined(Q_OS_WIN)
-                                 "MFT:d3d=11", "MFT:d3d=9", "D3D11",
+                                 "MFT:d3d=11", "D3D11",
 #elif defined(Q_OS_DARWIN)
                                  "VT", "VideoToolbox",
 #elif defined(Q_OS_ANDROID)
                                  "AMediaCodec:java=0:async=1",
 #elif defined(Q_OS_LINUX)
                                  "VAAPI", "VDPAU",
+// TODO: rpi
 #endif
-                                 "CUDA", "FFmpeg"}); // no display for 2nd video
+                                 "CUDA", "hap", "FFmpeg", "dav1d"}); // no display for 2nd video
     player_.onStateChanged([this](State value){
         Q_EMIT stateChanged(toQt(value));
     });
@@ -68,6 +69,7 @@ MediaPlayerControl::MediaPlayerControl(QObject* parent) : QMediaPlayerControl(pa
     });
     player_.setRenderCallback([this](void*){
         Q_EMIT frameAvailable();
+        //Q_EMIT positionChanged(player_.position());
     });
 }
 
