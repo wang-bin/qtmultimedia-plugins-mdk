@@ -13,7 +13,7 @@
 MDKMediaIntegration::MDKMediaIntegration() = default;
 MDKMediaIntegration::~MDKMediaIntegration() = default;
 
-QPlatformMediaPlayer *MDKMediaIntegration::createPlayer(QMediaPlayer *player)
+MDKMediaPlayerResult MDKMediaIntegration::createPlayer(QMediaPlayer *player)
 {
 #ifdef MDK_ABI
     QMediaIO::registerOnce();
@@ -21,7 +21,7 @@ QPlatformMediaPlayer *MDKMediaIntegration::createPlayer(QMediaPlayer *player)
     return new MDKPlayerControl(player);
 }
 
-QPlatformVideoSink *MDKMediaIntegration::createVideoSink(QVideoSink *sink)
+MDKVideoSinkResult MDKMediaIntegration::createVideoSink(QVideoSink *sink)
 {
     return new QPlatformVideoSink(sink);
 }

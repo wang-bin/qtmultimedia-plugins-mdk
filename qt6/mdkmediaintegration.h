@@ -6,11 +6,19 @@
 #pragma once
 #include <private/qplatformmediaintegration_p.h>
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 10, 0)
+using MDKMediaPlayerResult = QMaybe<QPlatformMediaPlayer *>;
+using MDKVideoSinkResult = QMaybe<QPlatformVideoSink *>;
+#else
+using MDKMediaPlayerResult = q23::expected<QPlatformMediaPlayer *, QString>;
+using MDKVideoSinkResult = q23::expected<QPlatformVideoSink *, QString>;
+#endif
+
 class MDKMediaIntegration final : public QPlatformMediaIntegration {
 public:
     MDKMediaIntegration();
     ~MDKMediaIntegration() override;
 
-    QPlatformMediaPlayer *createPlayer(QMediaPlayer *player) override;
-    QPlatformVideoSink *createVideoSink(QVideoSink *sink) override;
+    MDKMediaPlayerResult createPlayer(QMediaPlayer *player) override;
+    MDKVideoSinkResult createVideoSink(QVideoSink *sink) override;
 };
