@@ -174,7 +174,7 @@ void MediaPlayerControl::setMedia(const QMediaContent& media, QIODevice* io)
 {
     stop();
     if (io) {
-        player_.setMedia(QString("qio:%1").arg(qintptr(io)).toUtf8().constData());
+        player_.setMedia(QString("qio:%1").arg(quintptr(io)).toUtf8().constData());
     } else {
         if (media.canonicalUrl().isLocalFile())
             player_.setMedia(media.canonicalUrl().toLocalFile().toUtf8().constData()); // for windows
