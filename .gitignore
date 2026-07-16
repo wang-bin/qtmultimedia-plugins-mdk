@@ -1,5 +1,7 @@
 mdk-sdk/
 out/
+build/
+.cache/
 
 # C++ objects and libs
 *.slo

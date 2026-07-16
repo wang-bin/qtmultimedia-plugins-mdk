@@ -1,21 +1,51 @@
 # qtmultimedia-plugins-mdk
 qt multimedia plugins implemented on top of [mdk-sdk](https://github.com/wang-bin/mdk-sdk)
 
-Multimedia plugins are looked up in alphabetical order, so mdk plugin may be not selected. Since Qt5.13 environment var `QT_MULTIMEDIA_PREFERRED_PLUGINS=mdk` can enable mdk as backend.
+Supports **Qt 5** (mediaservice plugin) and **Qt 6.4+** (multimedia plugin).
+
+Qt6 architecture and data flow: [docs/qt6-plugin-design.md](docs/qt6-plugin-design.md).
+
+## Select the backend
+
+| Qt | Environment variable |
+|----|----------------------|
+| **Qt5** | `QT_MULTIMEDIA_PREFERRED_PLUGINS=mdk` (plugin key historically `mdkservice` in [`qt5/mdkmediaservice.json`](qt5/mdkmediaservice.json)) |
+| **Qt6** | `QT_MEDIA_BACKEND=mdk` (plugin key `mdk`, install under `plugins/multimedia/`) |
 
 ## Features
 - All formats. You can replace ffmpeg library in the sdk to support more formats
-- GPU decoders (hardcoded because of qtmutimedia limitation, see [QTBUG-74393](https://bugreports.qt.io/browse/QTBUG-74393)
-- Optimized OpenGL rendering
+- GPU decoders (hardcoded because of qtmultimedia limitation, see [QTBUG-74393](https://bugreports.qt.io/browse/QTBUG-74393))
+- Optimized OpenGL rendering (Qt6: offscreen FBO → `QVideoSink`)
 - HDR tone mapping
+- Tracks, metadata, loops, buffer ranges, `QAudioOutput` volume/mute/device routing (Qt6)
 
-## Build
-- Download a sdk from https://sourceforge.net/projects/mdk-sdk/files/nightly or https://github.com/wang-bin/mdk-sdk/releases
-- Extract sdk into this dir
-- Build and install. In QtCreator you can add a **Make** step with ***Make arguments: install***. Then plugin and mdk runtime files will be automatically installed to Qt dir
-- Try an Qt multimedia example
+## Build Qt6 (CMake)
 
->> Note: mdk-sdk-apple.tar.xz contains xcframework which is not supported yet in this project, use mdk-sdk-macOS.tar.xz or mdk-sdk-iOS.tar.xz instead
+Requires Qt **6.4+**. Uses [mdk-sdk](https://github.com/wang-bin/mdk-sdk) via `FindMDK.cmake` (`target_link_libraries(... mdk)`).
+
+```bash
+# Extract or symlink mdk-sdk into this directory (default MDK_SDK=./mdk-sdk), then:
+cmake -B build -DCMAKE_PREFIX_PATH=$HOME/Qt/6.11.0/macos
+cmake --build build
+cmake --install build   # installs plugin + mdk.framework into the Qt prefix
+```
+
+`cmake --install` copies `mdk.framework` into Qt's `lib/` so the plugin can resolve `@rpath/mdk.framework` (same RPATH pattern as other multimedia plugins). Without that, `QT_MEDIA_BACKEND=mdk` silently falls back to ffmpeg/darwin.
+
+Optional: `-DMDK_SDK=/path/to/mdk-sdk` if the SDK is not at `./mdk-sdk`.
+
+Enable: `export QT_MEDIA_BACKEND=mdk` and run a Qt Multimedia example.
+
+## Build Qt5 (qmake)
+
+- Download an SDK from https://sourceforge.net/projects/mdk-sdk/files/nightly or https://github.com/wang-bin/mdk-sdk/releases
+- Extract (or symlink) as `mdk-sdk` in this dir
+- Build [`qt5/mdkmediaservice.pro`](qt5/mdkmediaservice.pro) and install. In Qt Creator you can add a **Make** step with **Make arguments: install**. Plugin and mdk runtime files install into the Qt dir.
+- Enable with `QT_MULTIMEDIA_PREFERRED_PLUGINS=mdk`
+
+>> Note: mdk-sdk-apple.tar.xz contains xcframework which is not supported yet; use mdk-sdk-macOS.tar.xz or mdk-sdk-iOS.tar.xz instead.
 
 ## Issues
-- Qt for android adds abi suffix to shared libraries to support muliti abi, libmdk has no such suffix
+- Qt for Android adds an ABI suffix to shared libraries for multi-ABI; libmdk has no such suffix
+- Qt6 `QIODevice` playback uses `stream:` + `appendBuffer` (no MediaIO in the public SDK)
+- Audio device selection uses property `"audio.device"` (`setAudioDevice` / `audioDevices` / `onError` / `activeTracks` getter are not in the current packaged SDK headers yet)
