@@ -32,7 +32,11 @@ protected:
     void resizeGL(int w, int h) override {
         if (!player_)
             return;
-        player_->setVideoSurfaceSize(w * devicePixelRatio(), h * devicePixelRatio(), this);
+        GLint viewport[4] = {0, 0, 0, 0};
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        const int surfaceWidth = viewport[2] > 0 ? viewport[2] : int(w * devicePixelRatioF());
+        const int surfaceHeight = viewport[3] > 0 ? viewport[3] : int(h * devicePixelRatioF());
+        player_->setVideoSurfaceSize(surfaceWidth, surfaceHeight, this);
     }
 
     void paintGL() override {
