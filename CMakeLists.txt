@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Multimedia OpenGL MultimediaPrivate)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui GuiPrivate Multimedia OpenGL MultimediaPrivate)
 
 # MDK_SDK defaults to ./mdk-sdk in the project root
 if(NOT MDK_SDK)
@@ -29,6 +29,8 @@ set(MDK_PLUGIN_SOURCES
     qt6/mdkmediaintegration.h
     qt6/mdkplayercontrol.cpp
     qt6/mdkplayercontrol.h
+    qt6/mdkrihiframe.cpp
+    qt6/mdkrihiframe.h
     qt6/mdkvideosink.cpp
     qt6/mdkvideosink.h
     qt6/qtcompat.h
@@ -49,6 +51,7 @@ target_include_directories(mdkmediaplugin PRIVATE
 target_link_libraries(mdkmediaplugin PRIVATE
     Qt6::Core
     Qt6::Gui
+    Qt6::GuiPrivate
     Qt6::Multimedia
     Qt6::MultimediaPrivate
     Qt6::OpenGL

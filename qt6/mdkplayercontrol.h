@@ -13,12 +13,15 @@
 #include "mdk/Player.h"
 #include "mdk/global.h"
 
+#include <memory>
+
 class QVideoSink;
 class QOpenGLFramebufferObject;
 class QOffscreenSurface;
 class QOpenGLContext;
 class QTimer;
 class QPlatformAudioOutput;
+struct MDKRhiContext;
 
 class MDKPlayerControl final : public QObject, public QPlatformMediaPlayer
 {
@@ -69,6 +72,8 @@ private Q_SLOTS:
 
 private:
     void ensureGLContext();
+    bool tryPushRhiFrame();
+    void pushCpuFrame();
     void updateMetaData();
     void resetTrackCache();
     void stopStreamPump();
@@ -89,6 +94,7 @@ private:
     QOffscreenSurface *surface_ = nullptr;
     QOpenGLContext *glContext_ = nullptr;
     QOpenGLFramebufferObject *fbo_ = nullptr;
+    std::shared_ptr<MDKRhiContext> rhiCtx_;
     QTimer *positionTimer_ = nullptr;
     QTimer *streamPump_ = nullptr;
 };

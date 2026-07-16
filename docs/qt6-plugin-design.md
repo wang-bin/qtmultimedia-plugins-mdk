@@ -9,7 +9,7 @@ This document describes the architecture of the **Qt 6.4+** MDK multimedia backe
 - Depend only on **public** MDK headers (`mdk/Player.h`, …) from a packaged SDK — not ABI/internal headers.
 - Survive Qt 6 private-API drift across minor versions (6.4 → 6.5 `QMaybe` → 6.10 `q23::expected`).
 
-Non-goals (v1): camera, capture session, recorder, screen/window capture, RHI zero-copy video.
+Non-goals (v1): camera, capture session, recorder, screen/window capture.
 
 ## How Qt loads the backend
 
@@ -97,6 +97,39 @@ Active-track **getter** is cached in the plugin when the packaged SDK has no `Pl
 
 Target: deliver frames into `QVideoSink` so Widgets and Qt Quick `VideoOutput` work without a custom RHI node.
 
+When `QVideoSink::rhi()` is set (Qt Quick `VideoOutput`, RHI-based window), frames use **zero-copy QRhi textures**. Otherwise the plugin falls back to offscreen GL FBO readback.
+
+### QRhi path (preferred)
+
+```mermaid
+sequenceDiagram
+  participant MDK as mdk::Player
+  participant Ctrl as MDKPlayerControl
+  participant Buf as MDKRhiVideoBuffer
+  participant RHI as QRhi thread
+  participant Sink as QVideoSink
+
+  Ctrl->>MDK: setRenderCallback
+  MDK-->>Ctrl: onFrameAvailable queued
+  Ctrl->>Sink: setVideoFrame RhiTextureHandle
+  Note over Sink,RHI: VideoOutput maps textures
+  RHI->>Buf: mapTextures
+  Buf->>Buf: ensure QRhiTexture RT + setRenderAPI
+  Buf->>MDK: renderVideo into RT
+  Buf-->>RHI: QRhiTexture RGBA8
+```
+
+Details ([`qt6/mdkrihiframe.*`](../qt6/mdkrihiframe.*), patterned on libmdk `examples/Qt/{qmlrhi,rhiwidget}`):
+
+1. `onFrameAvailable` pushes an `MDKRhiVideoBuffer` (`QHwVideoBuffer` / `RhiTextureHandle`) without rendering yet.
+2. Qt maps the frame on the **RHI thread** via `mapTextures()`.
+3. There the plugin creates/resizes a `QRhiTexture` (RGBA8, RenderTarget), binds MDK `RenderAPI` (Metal / D3D11 / D3D12 / Vulkan / OpenGL FBO from `QGles2TextureRenderTarget`), and calls `renderVideo()`.
+4. Returned `QVideoFrameTextures` exposes that texture to Multimedia’s video node.
+
+`setRenderAPI` runs when the RT is (re)created, not every frame. Y-flip (`scale(1,-1)`) is applied for OpenGL only.
+
+### CPU fallback
+
 ```mermaid
 sequenceDiagram
   participant MDK as mdk::Player
@@ -113,15 +146,9 @@ sequenceDiagram
   Ctrl->>Sink: setVideoFrame QVideoFrame
 ```
 
-Details:
+Used when `sink->rhi()` is null (or RHI setup fails). Same FBO/`toImage` path as before.
 
-1. Shared / offscreen `QOpenGLContext` + `QOffscreenSurface`.
-2. `QOpenGLFramebufferObject` sized to the video.
-3. `GLRenderAPI.fbo = fbo->handle()` via `setRenderAPI` **only when the FBO changes** (create/resize), not every frame.
-4. Y-flip via `player.scale(1, -1)` when the FBO is (re)created.
-5. Readback to `QImage` → `QVideoFrameFormat::Format_RGBA8888` → `QVideoSink::setVideoFrame`.
-
-`MDKVideoSink` does not own GL resources; it exists so `createVideoSink` succeeds. Future work may add foreign RHI (`Metal` / `D3D` / `Vulkan`) using MDK `RenderAPI` for zero-copy.
+`MDKVideoSink` remains a thin `QPlatformVideoSink`; RHI comes from `QVideoSink::rhi()` set by the presentation side.
 
 ## Audio path
 
@@ -155,12 +182,12 @@ Plugin `INSTALL_RPATH` is `@loader_path/../../lib`, matching other Qt multimedia
 | Entry | `QMediaServiceProviderPlugin` | `QPlatformMediaPlugin` |
 | Selection | `QT_MULTIMEDIA_PREFERRED_PLUGINS` | `QT_MEDIA_BACKEND` |
 | Key | historically `mdkservice` | `mdk` |
-| Video to app | `QAbstractVideoSurface` / OpenGL widget | `QVideoSink` + FBO readback |
+| Video to app | `QAbstractVideoSurface` / OpenGL widget | `QVideoSink` + QRhi (fallback FBO readback) |
 | Build | qmake | CMake + FindMDK |
 
 ## Limitations and future work
 
-- FBO CPU readback is portable but not zero-copy; RHI foreign rendering is deferred.
+- CPU FBO readback remains the fallback when no `QVideoSink` RHI is available.
 - No capture/camera stack.
 - Packaged SDK gaps (commented or worked around in code): dedicated `onError`, `setAudioDevice` / `audioDevices`, `activeTracks` getter — use `onEvent`, `"audio.device"`, and a local track cache until SDK headers expose them.
 - Android multi-ABI library naming mismatch with Qt’s ABI-suffixed plugins remains an install concern.
@@ -173,6 +200,7 @@ qt6/
   mdkplatformmediaplugin.*    # QPlatformMediaPlugin
   mdkmediaintegration.*       # QPlatformMediaIntegration
   mdkplayercontrol.*          # QPlatformMediaPlayer + mdk::Player
+  mdkrihiframe.*              # QRhiTexture QHwVideoBuffer path
   mdkvideosink.*              # QPlatformVideoSink
   qtcompat.h                  # create*() return-type shims
 CMakeLists.txt                # out-of-tree build / install

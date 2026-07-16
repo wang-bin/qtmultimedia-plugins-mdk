@@ -15,7 +15,7 @@ Qt6 architecture and data flow: [docs/qt6-plugin-design.md](docs/qt6-plugin-desi
 ## Features
 - All formats. You can replace ffmpeg library in the sdk to support more formats
 - GPU decoders (hardcoded because of qtmultimedia limitation, see [QTBUG-74393](https://bugreports.qt.io/browse/QTBUG-74393))
-- Optimized OpenGL rendering (Qt6: offscreen FBO → `QVideoSink`)
+- Optimized OpenGL / QRhi rendering (Qt6: QRhi zero-copy when `QVideoSink::rhi()` is set; else FBO → `QVideoSink`)
 - HDR tone mapping
 - Tracks, metadata, loops, buffer ranges, `QAudioOutput` volume/mute/device routing (Qt6)
 

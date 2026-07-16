@@ -4,12 +4,14 @@
  * MIT License
  */
 #include "mdkplayercontrol.h"
+#include "mdkrihiframe.h"
 
 #include "mdk/MediaInfo.h"
 #include "mdk/RenderAPI.h"
 #include "mdk/global.h"
 
 #include <QtMultimedia/private/qplatformaudiooutput_p.h>
+#include <QtMultimedia/private/qvideoframe_p.h>
 #include <QtMultimedia/qaudiooutput.h>
 #include <QtMultimedia/qmediaplayer.h>
 #include <QtMultimedia/qvideoframe.h>
@@ -24,6 +26,7 @@
 #include <QOpenGLFramebufferObject>
 #include <QStringList>
 #include <QTimer>
+#include <rhi/qrhi.h>
 
 using namespace MDK_NS;
 
@@ -183,6 +186,16 @@ MDKPlayerControl::~MDKPlayerControl()
     player_.onStateChanged(nullptr);
     player_.onEvent(nullptr);
     // player_.onError(nullptr); — not in current mdk-sdk
+
+    if (sink_)
+        sink_->setVideoFrame({});
+
+    if (rhiCtx_) {
+        std::lock_guard<std::mutex> lock(rhiCtx_->mutex);
+        rhiCtx_->player = nullptr;
+        rhiCtx_->reset();
+        rhiCtx_.reset();
+    }
 
     if (audioOutput_ && audioOutput_->q)
         audioOutput_->q->disconnect(this);
@@ -401,10 +414,25 @@ void MDKPlayerControl::applyAudioOutput()
 
 void MDKPlayerControl::setVideoSink(QVideoSink *sink)
 {
+    if (sink_ == sink)
+        return;
+
+    if (sink_)
+        sink_->setVideoFrame({});
+
     sink_ = sink;
     if (!sink) {
         player_.setRenderCallback(nullptr);
+        if (rhiCtx_) {
+            std::lock_guard<std::mutex> lock(rhiCtx_->mutex);
+            rhiCtx_->reset();
+        }
         return;
+    }
+
+    if (!rhiCtx_) {
+        rhiCtx_ = std::make_shared<MDKRhiContext>();
+        rhiCtx_->player = &player_;
     }
 
     player_.setVideoSurfaceSize(1, 1);
@@ -564,14 +592,39 @@ void MDKPlayerControl::ensureGLContext()
     glContext_->create();
 }
 
-void MDKPlayerControl::onFrameAvailable()
+bool MDKPlayerControl::tryPushRhiFrame()
 {
-    if (!sink_)
-        return;
+    QRhi *rhi = sink_ ? sink_->rhi() : nullptr;
+    if (!rhi || !rhiCtx_)
+        return false;
 
-    if (video_w_ <= 0 || video_h_ <= 0)
-        return;
+    switch (rhi->backend()) {
+#if QT_CONFIG(opengl)
+    case QRhi::OpenGLES2:
+#endif
+#if QT_CONFIG(metal)
+    case QRhi::Metal:
+#endif
+#if defined(Q_OS_WIN)
+    case QRhi::D3D11:
+    case QRhi::D3D12:
+#endif
+#if QT_CONFIG(vulkan)
+    case QRhi::Vulkan:
+#endif
+        break;
+    default:
+        return false;
+    }
 
+    QVideoFrameFormat format(QSize(video_w_, video_h_), QVideoFrameFormat::Format_RGBA8888);
+    auto buffer = std::make_unique<MDKRhiVideoBuffer>(rhiCtx_, format.frameSize());
+    sink_->setVideoFrame(QVideoFramePrivate::createFrame(std::move(buffer), std::move(format)));
+    return true;
+}
+
+void MDKPlayerControl::pushCpuFrame()
+{
     ensureGLContext();
     if (!glContext_ || !glContext_->makeCurrent(surface_))
         return;
@@ -607,4 +660,18 @@ void MDKPlayerControl::onFrameAvailable()
         frame.unmap();
     }
     sink_->setVideoFrame(frame);
+}
+
+void MDKPlayerControl::onFrameAvailable()
+{
+    if (!sink_)
+        return;
+
+    if (video_w_ <= 0 || video_h_ <= 0)
+        return;
+
+    if (tryPushRhiFrame())
+        return;
+
+    pushCpuFrame();
 }
