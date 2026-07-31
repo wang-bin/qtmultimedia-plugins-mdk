@@ -16,9 +16,6 @@
 #include <memory>
 
 class QVideoSink;
-class QOpenGLFramebufferObject;
-class QOffscreenSurface;
-class QOpenGLContext;
 class QTimer;
 class QPlatformAudioOutput;
 struct MDKRhiContext;
@@ -71,9 +68,6 @@ private Q_SLOTS:
     void pumpStreamBuffer();
 
 private:
-    void ensureGLContext();
-    bool tryPushRhiFrame();
-    void pushCpuFrame();
     void updateMetaData();
     void resetTrackCache();
     void stopStreamPump();
@@ -91,9 +85,6 @@ private:
     QMediaMetaData metaData_;
     int activeTracks_[NTrackTypes] = { 0, 0, -1 };
 
-    QOffscreenSurface *surface_ = nullptr;
-    QOpenGLContext *glContext_ = nullptr;
-    QOpenGLFramebufferObject *fbo_ = nullptr;
     std::shared_ptr<MDKRhiContext> rhiCtx_;
     QTimer *positionTimer_ = nullptr;
     QTimer *streamPump_ = nullptr;

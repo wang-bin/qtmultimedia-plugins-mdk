@@ -7,7 +7,6 @@
 #include "mdkrihiframe.h"
 
 #include "mdk/MediaInfo.h"
-#include "mdk/RenderAPI.h"
 #include "mdk/global.h"
 
 #include <QtMultimedia/private/qplatformaudiooutput_p.h>
@@ -21,9 +20,6 @@
 #include <QDateTime>
 #include <QIODevice>
 #include <QMetaObject>
-#include <QOffscreenSurface>
-#include <QOpenGLContext>
-#include <QOpenGLFramebufferObject>
 #include <QStringList>
 #include <QTimer>
 #include <rhi/qrhi.h>
@@ -199,16 +195,6 @@ MDKPlayerControl::~MDKPlayerControl()
 
     if (audioOutput_ && audioOutput_->q)
         audioOutput_->q->disconnect(this);
-
-    if (fbo_) {
-        if (glContext_ && surface_ && glContext_->makeCurrent(surface_)) {
-            delete fbo_;
-            glContext_->doneCurrent();
-        } else {
-            delete fbo_;
-        }
-        fbo_ = nullptr;
-    }
 }
 
 qint64 MDKPlayerControl::duration() const
@@ -580,23 +566,14 @@ void MDKPlayerControl::updateMetaData()
     metaDataChanged();
 }
 
-void MDKPlayerControl::ensureGLContext()
+void MDKPlayerControl::onFrameAvailable()
 {
-    if (glContext_)
+    if (!sink_ || video_w_ <= 0 || video_h_ <= 0 || !rhiCtx_)
         return;
-    surface_ = new QOffscreenSurface(nullptr, this);
-    surface_->create();
-    glContext_ = new QOpenGLContext(this);
-    if (QOpenGLContext::currentContext())
-        glContext_->setShareContext(QOpenGLContext::currentContext());
-    glContext_->create();
-}
 
-bool MDKPlayerControl::tryPushRhiFrame()
-{
-    QRhi *rhi = sink_ ? sink_->rhi() : nullptr;
-    if (!rhi || !rhiCtx_)
-        return false;
+    QRhi *rhi = sink_->rhi();
+    if (!rhi)
+        return;
 
     switch (rhi->backend()) {
 #if QT_CONFIG(opengl)
@@ -614,64 +591,10 @@ bool MDKPlayerControl::tryPushRhiFrame()
 #endif
         break;
     default:
-        return false;
+        return;
     }
 
     QVideoFrameFormat format(QSize(video_w_, video_h_), QVideoFrameFormat::Format_RGBA8888);
     auto buffer = std::make_unique<MDKRhiVideoBuffer>(rhiCtx_, format.frameSize());
     sink_->setVideoFrame(QVideoFramePrivate::createFrame(std::move(buffer), std::move(format)));
-    return true;
-}
-
-void MDKPlayerControl::pushCpuFrame()
-{
-    ensureGLContext();
-    if (!glContext_ || !glContext_->makeCurrent(surface_))
-        return;
-
-    if (!fbo_ || fbo_->size() != QSize(video_w_, video_h_)) {
-        player_.scale(1.0f, -1.0f);
-        player_.setVideoSurfaceSize(video_w_, video_h_);
-        delete fbo_;
-        fbo_ = new QOpenGLFramebufferObject(video_w_, video_h_);
-        GLRenderAPI ra{};
-        ra.fbo = int(fbo_->handle());
-        player_.setRenderAPI(&ra);
-    }
-
-    fbo_->bind();
-    player_.renderVideo();
-    fbo_->release();
-
-    QImage img = fbo_->toImage(false);
-    glContext_->doneCurrent();
-    if (img.isNull())
-        return;
-
-    img = img.convertToFormat(QImage::Format_RGBA8888);
-    QVideoFrame frame(QVideoFrameFormat(img.size(), QVideoFrameFormat::Format_RGBA8888));
-    if (frame.map(QVideoFrame::WriteOnly)) {
-        auto *dst = frame.bits(0);
-        const auto *src = img.constBits();
-        const int dstStride = frame.bytesPerLine(0);
-        const int srcStride = img.bytesPerLine();
-        for (int y = 0; y < img.height(); ++y)
-            memcpy(dst + y * dstStride, src + y * srcStride, size_t(qMin(srcStride, dstStride)));
-        frame.unmap();
-    }
-    sink_->setVideoFrame(frame);
-}
-
-void MDKPlayerControl::onFrameAvailable()
-{
-    if (!sink_)
-        return;
-
-    if (video_w_ <= 0 || video_h_ <= 0)
-        return;
-
-    if (tryPushRhiFrame())
-        return;
-
-    pushCpuFrame();
 }
