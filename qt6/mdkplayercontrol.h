@@ -13,6 +13,7 @@
 #include "mdk/Player.h"
 #include "mdk/global.h"
 
+#include <atomic>
 #include <memory>
 
 class QVideoSink;
@@ -84,6 +85,10 @@ private:
     MDK_NS::MediaStatus status_{};
     QMediaMetaData metaData_;
     int activeTracks_[NTrackTypes] = { 0, 0, -1 };
+    // Each setMedia() call gets a new generation so delayed callbacks cannot update a newer source.
+    std::atomic<quint64> mediaGeneration_{ 0 };
+    // False while the control represents NoMedia; late callbacks are ignored.
+    std::atomic_bool sourceActive_{ false };
 
     std::shared_ptr<MDKRhiContext> rhiCtx_;
     QTimer *positionTimer_ = nullptr;

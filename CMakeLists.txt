@@ -3,6 +3,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(qtmultimedia-plugins-mdk VERSION 0.1 LANGUAGES CXX)
 
+option(BUILD_TESTING "Build tests" OFF)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -57,6 +59,38 @@ target_link_libraries(mdkmediaplugin PRIVATE
     Qt6::OpenGL
     mdk
 )
+
+if(BUILD_TESTING)
+    enable_testing()
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+
+    qt_add_executable(tst_mdkplayercontrol
+        tests/tst_mdkplayercontrol.cpp
+        qt6/mdkplayercontrol.cpp
+        qt6/mdkplayercontrol.h
+        qt6/mdkrihiframe.cpp
+        qt6/mdkrihiframe.h
+    )
+    target_include_directories(tst_mdkplayercontrol PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/qt6
+    )
+    target_link_libraries(tst_mdkplayercontrol PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::GuiPrivate
+        Qt6::Multimedia
+        Qt6::MultimediaPrivate
+        Qt6::OpenGL
+        Qt6::Test
+        mdk
+    )
+    add_test(NAME tst_mdkplayercontrol COMMAND tst_mdkplayercontrol)
+    if(APPLE)
+        set_tests_properties(tst_mdkplayercontrol PROPERTIES
+            ENVIRONMENT "QT_MEDIA_BACKEND=darwin"
+        )
+    endif()
+endif()
 
 get_filename_component(_qt_prefix "${Qt6_DIR}/../../.." ABSOLUTE)
 set(_qt_plugins_dir "${_qt_prefix}/plugins/multimedia")

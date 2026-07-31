@@ -110,6 +110,10 @@ MDKPlayerControl::MDKPlayerControl(QMediaPlayer *player)
         QMetaObject::invokeMethod(
             this,
             [this, value] {
+                // MDK reports from worker threads; only apply callbacks that still belong to
+                // an active source.
+                if (!sourceActive_.load() && value != State::Stopped)
+                    return;
                 stateChanged(toQt(value));
                 if (toQt(value) == QMediaPlayer::PlayingState)
                     positionTimer_->start();
@@ -120,28 +124,30 @@ MDKPlayerControl::MDKPlayerControl(QMediaPlayer *player)
     });
 
     player_.onMediaStatus([this](MediaStatus, MediaStatus value) {
-        if (flags_added(status_, value, MediaStatus::Loaded)) {
-            if (!player_.mediaInfo().video.empty()) {
-                const auto &c = player_.mediaInfo().video[0].codec;
-                video_w_ = c.width;
-                video_h_ = c.height;
-            }
-            updateMetaData();
-            tracksChanged();
-            activeTracksChanged();
-        }
-        if (test_flag(value & MediaStatus::Invalid)) {
-            QMetaObject::invokeMethod(
-                this,
-                [this] {
-                    error(QMediaPlayer::ResourceError, tr("Invalid media."));
-                },
-                Qt::QueuedConnection);
-        }
-        status_ = value;
+        if (!sourceActive_.load())
+            return false;
+
+        // Keep all Qt-visible state changes on the control's thread. This also lets the queued lambda
+        // discard a status that was posted just before setMedia({}) cleared the source.
         QMetaObject::invokeMethod(
             this,
             [this, value] {
+                if (!sourceActive_.load())
+                    return;
+                if (flags_added(status_, value, MediaStatus::Loaded)) {
+                    const auto &info = player_.mediaInfo();
+                    if (!info.video.empty()) {
+                        const auto &c = info.video[0].codec;
+                        video_w_ = c.width;
+                        video_h_ = c.height;
+                    }
+                    updateMetaData();
+                    tracksChanged();
+                    activeTracksChanged();
+                }
+                if (test_flag(value & MediaStatus::Invalid))
+                    error(QMediaPlayer::ResourceError, tr("Invalid media."));
+                status_ = value;
                 mediaStatusChanged(toQt(value));
             },
             Qt::QueuedConnection);
@@ -150,10 +156,16 @@ MDKPlayerControl::MDKPlayerControl(QMediaPlayer *player)
 
     // player_.onError(...) — not in current mdk-sdk; use onEvent for decoder failures.
     player_.onEvent([this](const MediaEvent &e) {
+        if (!sourceActive_.load())
+            return false;
         if (e.error < 0 && (e.category == "decoder.audio" || e.category == "decoder.video")) {
+            // Decoder events can arrive after the source was cleared, so check sourceActive_ again
+            // when the error is delivered on the Qt thread.
             QMetaObject::invokeMethod(
                 this,
                 [this] {
+                    if (!sourceActive_.load())
+                        return;
                     error(QMediaPlayer::FormatError,
                           tr("Unsupported media, a codec is missing."));
                 },
@@ -281,6 +293,12 @@ void MDKPlayerControl::pumpStreamBuffer()
 
 void MDKPlayerControl::setMedia(const QUrl &url, QIODevice *stream)
 {
+    // MDK prepare/status callbacks are asynchronous. The generation identifies the source for
+    // which a callback was registered, while sourceActive_ handles NoMedia immediately.
+    const quint64 generation = mediaGeneration_.fetch_add(1) + 1;
+    const bool hasSource = !url.isEmpty() || stream;
+    sourceActive_.store(hasSource);
+
     stop();
     stopStreamPump();
     url_ = url;
@@ -288,6 +306,33 @@ void MDKPlayerControl::setMedia(const QUrl &url, QIODevice *stream)
     resetTrackCache();
     metaData_ = {};
     metaDataChanged();
+
+    if (!hasSource) {
+        // A null QUrl is a command to discard the current source, not a media URL to prepare.
+        // Unload MDK first so both regular media and its internal stream: I/O are released.
+        player_.setMedia(nullptr);
+        duration_ = 0;
+        video_w_ = 0;
+        video_h_ = 0;
+        status_ = MediaStatus::NoMedia;
+        activeTracks_[VideoStream] = -1;
+        activeTracks_[AudioStream] = -1;
+        activeTracks_[SubtitleStream] = -1;
+        if (sink_)
+            sink_->setVideoFrame({});
+
+        positionChanged(0);
+        durationChanged(0);
+        bufferProgressChanged(0.f);
+        seekableChanged(false);
+        audioAvailableChanged(false);
+        videoAvailableChanged(false);
+        tracksChanged();
+        activeTracksChanged();
+        stateChanged(QMediaPlayer::StoppedState);
+        mediaStatusChanged(QMediaPlayer::NoMedia);
+        return;
+    }
 
     if (stream) {
         // Public SDK has no MediaIO; feed QIODevice via stream: + appendBuffer.
@@ -308,33 +353,40 @@ void MDKPlayerControl::setMedia(const QUrl &url, QIODevice *stream)
 
     positionChanged(0);
     player_.waitFor(State::Stopped);
-    player_.prepare(0, [this](int64_t position, bool *) {
-        if (position < 0) {
-            QMetaObject::invokeMethod(
-                this,
-                [this] {
-                    error(QMediaPlayer::ResourceError, tr("Failed to load source."));
-                },
-                Qt::QueuedConnection);
-        }
+    player_.prepare(0, [this, generation](int64_t position, bool *) {
+        // Do not inspect or publish results from a prepare that belongs to a replaced source.
+        if (generation != mediaGeneration_.load() || !sourceActive_.load())
+            return true;
+
         const auto &info = player_.mediaInfo();
-        duration_ = info.duration;
-        video_w_ = 0;
-        video_h_ = 0;
+        const qint64 duration = info.duration;
         const bool hasA = !info.audio.empty();
         const bool hasV = !info.video.empty();
+        int videoWidth = 0;
+        int videoHeight = 0;
         if (hasV) {
             const auto &c = info.video[0].codec;
-            video_w_ = c.width;
-            video_h_ = c.height;
+            videoWidth = c.width;
+            videoHeight = c.height;
         }
-        activeTracks_[AudioStream] = hasA ? 0 : -1;
-        activeTracks_[VideoStream] = hasV ? 0 : -1;
-        activeTracks_[SubtitleStream] = info.subtitle.empty() ? -1 : 0;
+        const bool hasSubtitle = !info.subtitle.empty();
 
         QMetaObject::invokeMethod(
             this,
-            [this, hasA, hasV, position] {
+            [this, generation, position, duration, hasA, hasV, hasSubtitle, videoWidth,
+             videoHeight] {
+                // The first check protects the worker-side result; this second check protects the
+                // queued Qt-thread update if the user clears or replaces the source in between.
+                if (generation != mediaGeneration_.load() || !sourceActive_.load())
+                    return;
+                if (position < 0)
+                    error(QMediaPlayer::ResourceError, tr("Failed to load source."));
+                duration_ = duration;
+                video_w_ = videoWidth;
+                video_h_ = videoHeight;
+                activeTracks_[AudioStream] = hasA ? 0 : -1;
+                activeTracks_[VideoStream] = hasV ? 0 : -1;
+                activeTracks_[SubtitleStream] = hasSubtitle ? 0 : -1;
                 durationChanged(duration_);
                 audioAvailableChanged(hasA);
                 videoAvailableChanged(hasV);
