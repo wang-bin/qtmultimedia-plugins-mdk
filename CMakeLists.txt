@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.16)
 project(qtmultimedia-plugins-mdk VERSION 0.1 LANGUAGES CXX)
 
 option(BUILD_TESTING "Build tests" OFF)
+option(MDK_USE_QT_RHI_TEXTURE_POOL
+    "Use Qt 6.8.2+ QVideoFrameTexturePool for independent RHI frame slots" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -60,6 +62,10 @@ target_link_libraries(mdkmediaplugin PRIVATE
     mdk
 )
 
+if(MDK_USE_QT_RHI_TEXTURE_POOL)
+    target_compile_definitions(mdkmediaplugin PRIVATE MDK_USE_QT_RHI_TEXTURE_POOL=1)
+endif()
+
 if(BUILD_TESTING)
     enable_testing()
     find_package(Qt6 REQUIRED COMPONENTS Test)
@@ -84,6 +90,9 @@ if(BUILD_TESTING)
         Qt6::Test
         mdk
     )
+    if(MDK_USE_QT_RHI_TEXTURE_POOL)
+        target_compile_definitions(tst_mdkplayercontrol PRIVATE MDK_USE_QT_RHI_TEXTURE_POOL=1)
+    endif()
     add_test(NAME tst_mdkplayercontrol COMMAND tst_mdkplayercontrol)
     if(APPLE)
         set_tests_properties(tst_mdkplayercontrol PROPERTIES
@@ -99,11 +108,24 @@ if(WIN32)
     set(_qt_bin_dir "${_qt_prefix}/bin")
 endif()
 
-# Match other Qt multimedia plugins: resolve @rpath deps from Qt's lib/.
-# MDK runtime must be installed there too (see install rules below).
+# Match the platform loader's relative-library syntax. The MDK runtime is
+# installed in Qt's lib/ (or bin/ on Windows) as done by the rules below.
+set(_mdk_install_rpath "")
+if(APPLE)
+    set(_mdk_install_rpath "@loader_path/../../lib")
+elseif(UNIX)
+    set(_mdk_install_rpath "$ORIGIN/../../lib")
+endif()
+
+if(WIN32)
+    set(_mdk_runtime_install_dir "${_qt_bin_dir}")
+else()
+    set(_mdk_runtime_install_dir "${_qt_lib_dir}")
+endif()
+
 set_target_properties(mdkmediaplugin PROPERTIES
     BUILD_RPATH "${MDK_RUNTIME_DIR};${_qt_lib_dir}"
-    INSTALL_RPATH "@loader_path/../../lib"
+    INSTALL_RPATH "${_mdk_install_rpath}"
 )
 
 install(TARGETS mdkmediaplugin
@@ -112,18 +134,15 @@ install(TARGETS mdkmediaplugin
     ARCHIVE DESTINATION "${_qt_plugins_dir}"
 )
 
-# Runtime: plugin links @rpath/mdk — install FindMDK's framework or runtime files next to Qt libs/bins.
+# Runtime: install FindMDK's framework or runtime files where the platform
+# loader can resolve them from the installed plugin.
 if(MDK_FRAMEWORK)
     install(DIRECTORY "${MDK_FRAMEWORK}"
         DESTINATION "${_qt_lib_dir}"
         USE_SOURCE_PERMISSIONS
     )
 elseif(MDK_RUNTIMES)
-    if(WIN32)
-        install(FILES ${MDK_RUNTIMES} DESTINATION "${_qt_bin_dir}")
-    else()
-        install(FILES ${MDK_RUNTIMES} DESTINATION "${_qt_lib_dir}")
-    endif()
+    install(FILES ${MDK_RUNTIMES} DESTINATION "${_mdk_runtime_install_dir}")
 endif()
 
 message(STATUS "Qt6: ${Qt6_DIR}")
@@ -131,4 +150,5 @@ message(STATUS "MDK_SDK=${MDK_SDK}")
 message(STATUS "MDK_FRAMEWORK=${MDK_FRAMEWORK}")
 message(STATUS "MDK_RUNTIMES=${MDK_RUNTIMES}")
 message(STATUS "Plugin install dir: ${_qt_plugins_dir}")
-message(STATUS "MDK runtime install dir: ${_qt_lib_dir}")
+message(STATUS "MDK runtime install dir: ${_mdk_runtime_install_dir}")
+message(STATUS "Qt RHI texture pool: ${MDK_USE_QT_RHI_TEXTURE_POOL}")

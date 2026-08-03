@@ -20,14 +20,22 @@ MDK_NS_BEGIN
 class Player;
 MDK_NS_END
 
+// The public build option is deliberately opt-in. MDK_HAS_QT_RHI_TEXTURE_POOL records whether
+// the requested mode is also supported by the Qt private API available at compile time.
+#if (MDK_USE_QT_RHI_TEXTURE_POOL+0) \
+        && QT_VERSION >= QT_VERSION_CHECK(6, 8, 2) \
+        && __has_include(<QtMultimedia/private/qvideoframetexturepool_p.h>)
+#  define MDK_HAS_QT_RHI_TEXTURE_POOL 1
+#else
+#  define MDK_HAS_QT_RHI_TEXTURE_POOL 0
+#endif
+
 /*!
- * Shared RHI render target for MDK → QVideoSink zero-copy frames.
- * Texture resources are created/used from the QRhi thread via mapTextures().
+ * QRhi resources used as one MDK render target. Creation and rendering happen on the QRhi thread
+ * through QHwVideoBuffer::mapTextures().
  */
-struct MDKRhiContext
+struct MDKRhiRenderTarget
 {
-    MDK_NS::Player *player = nullptr;
-    std::mutex mutex;
     QRhi *rhi = nullptr;
     QSize size;
     std::unique_ptr<QRhiTexture> texture;
@@ -36,9 +44,48 @@ struct MDKRhiContext
     bool apiBound = false;
 
     bool ensure(QRhi &rhi, QSize frameSize);
-    bool bindRenderAPI();
+    bool bindRenderAPI(MDK_NS::Player &player);
     void reset();
 };
+
+/*!
+ * State shared by all frames from one player. On Qt versions without QVideoFrameTexturePool the
+ * render target remains here to preserve the legacy single-texture path.
+ */
+struct MDKRhiContext
+{
+    MDK_NS::Player *player = nullptr;
+    std::mutex mutex;
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL
+    MDKRhiRenderTarget sharedTarget;
+#endif
+
+    void reset();
+};
+
+#if MDK_HAS_QT_RHI_TEXTURE_POOL
+/*!
+ * Texture wrapper stored in one QVideoFrameTexturePool slot. Ownership can be transferred from
+ * oldTextures only after Qt returns that slot for reuse.
+ */
+class MDKRhiFrameTextures final : public QVideoFrameTextures
+{
+public:
+    explicit MDKRhiFrameTextures(std::unique_ptr<MDKRhiRenderTarget> target);
+
+    QRhiTexture *texture(uint plane) const override;
+    bool usesRhi(const QRhi &rhi) const;
+    std::unique_ptr<MDKRhiRenderTarget> takeRenderTarget();
+
+private:
+    std::unique_ptr<MDKRhiRenderTarget> target_;
+};
+
+// Acquire a target for the current Qt texture-pool slot. Exposed internally for deterministic
+// resource lifetime tests; callers still own the returned target exclusively.
+std::unique_ptr<MDKRhiRenderTarget>
+mdkAcquireRhiRenderTarget(QRhi &rhi, QSize frameSize, QVideoFrameTexturesUPtr &oldTextures);
+#endif
 
 class MDKRhiVideoBuffer final : public QHwVideoBuffer
 {
@@ -54,5 +101,7 @@ public:
 private:
     std::shared_ptr<MDKRhiContext> ctx_;
     QSize size_;
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL
     bool rendered_ = false;
+#endif
 };

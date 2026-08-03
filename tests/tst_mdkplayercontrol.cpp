@@ -5,10 +5,14 @@
  * MIT License
  */
 #include "mdkplayercontrol.h"
+#include "mdkrihiframe.h"
 
 #include <QtMultimedia/qmediaplayer.h>
 #include <QtTest/qsignalspy.h>
 #include <QtTest/qtest.h>
+
+#include <rhi/qrhi.h>
+#include <rhi/qrhi_platform.h>
 
 #include <QBuffer>
 #include <QDataStream>
@@ -51,6 +55,8 @@ private Q_SLOTS:
     void emptySourceResetsState();
     void emptySourceWhileLoadingIgnoresOldCallbacks();
     void emptyUrlWithStreamIsStillAValidSource();
+    void rhiTexturePoolKeepsLiveSlotsIsolated();
+    void rhiTexturePoolReusesReturnedSlot();
 };
 
 void tst_MDKPlayerControl::emptySourceResetsState()
@@ -121,6 +127,51 @@ void tst_MDKPlayerControl::emptyUrlWithStreamIsStillAValidSource()
     QCOMPARE(control.media(), QUrl{});
     QCOMPARE(control.mediaStream(), &stream);
     QCOMPARE(QByteArray(control.player()->url()), QByteArray("stream:"));
+}
+
+void tst_MDKPlayerControl::rhiTexturePoolKeepsLiveSlotsIsolated()
+{
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL
+    QSKIP("Qt RHI texture-pool support is disabled or unavailable");
+#else
+    QRhiNullInitParams params;
+    std::unique_ptr<QRhi> rhi(QRhi::create(QRhi::Null, &params));
+    QVERIFY(rhi);
+
+    QVideoFrameTexturesUPtr noReturnedSlot;
+    auto first = mdkAcquireRhiRenderTarget(*rhi, QSize(16, 16), noReturnedSlot);
+    auto second = mdkAcquireRhiRenderTarget(*rhi, QSize(16, 16), noReturnedSlot);
+
+    QVERIFY(first);
+    QVERIFY(second);
+    QVERIFY(first->texture);
+    QVERIFY(second->texture);
+    QVERIFY(first->texture.get() != second->texture.get());
+#endif
+}
+
+void tst_MDKPlayerControl::rhiTexturePoolReusesReturnedSlot()
+{
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL
+    QSKIP("Qt RHI texture-pool support is disabled or unavailable");
+#else
+    QRhiNullInitParams params;
+    std::unique_ptr<QRhi> rhi(QRhi::create(QRhi::Null, &params));
+    QVERIFY(rhi);
+
+    QVideoFrameTexturesUPtr noReturnedSlot;
+    auto target = mdkAcquireRhiRenderTarget(*rhi, QSize(16, 16), noReturnedSlot);
+    QVERIFY(target);
+    QRhiTexture *const texture = target->texture.get();
+
+    QVideoFrameTexturesUPtr returnedSlot =
+            std::make_unique<MDKRhiFrameTextures>(std::move(target));
+    auto reused = mdkAcquireRhiRenderTarget(*rhi, QSize(16, 16), returnedSlot);
+
+    QVERIFY(reused);
+    QCOMPARE(reused->texture.get(), texture);
+    QCOMPARE(returnedSlot->texture(0), nullptr);
+#endif
 }
 
 QTEST_GUILESS_MAIN(tst_MDKPlayerControl)

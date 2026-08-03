@@ -15,7 +15,7 @@ Qt6 architecture and data flow: [docs/qt6-plugin-design.md](docs/qt6-plugin-desi
 ## Features
 - All formats. You can replace ffmpeg library in the sdk to support more formats
 - GPU decoders (hardcoded because of qtmultimedia limitation, see [QTBUG-74393](https://bugreports.qt.io/browse/QTBUG-74393))
-- Optimized OpenGL / QRhi rendering (Qt6: QRhi zero-copy when `QVideoSink::rhi()` is set; else FBO → `QVideoSink`)
+- QRhi-backed OpenGL / Metal / D3D / Vulkan rendering (Qt6: zero-copy when `QVideoSink::rhi()` exposes a supported backend; there is no CPU/FBO fallback)
 - HDR tone mapping
 - Tracks, metadata, loops, buffer ranges, `QAudioOutput` volume/mute/device routing (Qt6)
 
@@ -30,9 +30,11 @@ cmake --build build
 cmake --install build   # installs plugin + mdk.framework into the Qt prefix
 ```
 
-`cmake --install` copies `mdk.framework` into Qt's `lib/` so the plugin can resolve `@rpath/mdk.framework` (same RPATH pattern as other multimedia plugins). Without that, `QT_MEDIA_BACKEND=mdk` silently falls back to ffmpeg/darwin.
+On macOS, `cmake --install` copies `mdk.framework` into Qt's `lib/` so the plugin can resolve `@rpath/mdk.framework`. On Linux/other Unix targets, the plugin uses `$ORIGIN/../../lib` to locate the MDK runtime installed in Qt's `lib/`. Without the runtime in the expected Qt directory, `QT_MEDIA_BACKEND=mdk` silently falls back to another backend.
 
 Optional: `-DMDK_SDK=/path/to/mdk-sdk` if the SDK is not at `./mdk-sdk`.
+
+Optional: `-DMDK_USE_QT_RHI_TEXTURE_POOL=ON` enables independent Qt RHI frame-slot textures with Qt 6.8.2 or later. It defaults to `OFF`.
 
 Enable: `export QT_MEDIA_BACKEND=mdk` and run a Qt Multimedia example.
 

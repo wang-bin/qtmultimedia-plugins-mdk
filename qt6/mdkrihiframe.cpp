@@ -24,6 +24,7 @@
 
 using namespace MDK_NS;
 
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL
 namespace {
 
 class MDKFrameTextures final : public QVideoFrameTextures
@@ -36,7 +37,7 @@ public:
 
     QRhiTexture *texture(uint plane) const override
     {
-        return plane == 0 && ctx_ ? ctx_->texture.get() : nullptr;
+        return plane == 0 && ctx_ ? ctx_->sharedTarget.texture.get() : nullptr;
     }
 
 private:
@@ -44,8 +45,9 @@ private:
 };
 
 } // namespace
+#endif
 
-void MDKRhiContext::reset()
+void MDKRhiRenderTarget::reset()
 {
     apiBound = false;
     rp.reset();
@@ -55,7 +57,7 @@ void MDKRhiContext::reset()
     size = {};
 }
 
-bool MDKRhiContext::ensure(QRhi &newRhi, QSize frameSize)
+bool MDKRhiRenderTarget::ensure(QRhi &newRhi, QSize frameSize)
 {
     if (rhi == &newRhi && size == frameSize && texture && rt && rp)
         return true;
@@ -89,12 +91,12 @@ bool MDKRhiContext::ensure(QRhi &newRhi, QSize frameSize)
     }
 
     apiBound = false;
-    return bindRenderAPI();
+    return true;
 }
 
-bool MDKRhiContext::bindRenderAPI()
+bool MDKRhiRenderTarget::bindRenderAPI(Player &player)
 {
-    if (!player || !rhi || !texture)
+    if (!rhi || !texture)
         return false;
 
     const QRhiNativeHandles *nat = rhi->nativeHandles();
@@ -107,8 +109,8 @@ bool MDKRhiContext::bindRenderAPI()
         auto *glrt = static_cast<QGles2TextureRenderTarget *>(rt.get());
         GLRenderAPI ra{};
         ra.fbo = int(glrt->framebuffer);
-        player->setRenderAPI(&ra);
-        player->scale(1.0f, -1.0f);
+        player.setRenderAPI(&ra);
+        player.scale(1.0f, -1.0f);
         break;
     }
 #endif
@@ -119,8 +121,8 @@ bool MDKRhiContext::bindRenderAPI()
         ra.device = mtlnat->dev;
         ra.cmdQueue = mtlnat->cmdQueue;
         ra.texture = reinterpret_cast<const void *>(quintptr(texture->nativeTexture().object));
-        player->setRenderAPI(&ra);
-        player->scale(1.0f, 1.0f);
+        player.setRenderAPI(&ra);
+        player.scale(1.0f, 1.0f);
         break;
     }
 #endif
@@ -128,8 +130,8 @@ bool MDKRhiContext::bindRenderAPI()
     case QRhi::D3D11: {
         D3D11RenderAPI ra{};
         ra.rtv = reinterpret_cast<ID3D11DeviceChild *>(quintptr(texture->nativeTexture().object));
-        player->setRenderAPI(&ra);
-        player->scale(1.0f, 1.0f);
+        player.setRenderAPI(&ra);
+        player.scale(1.0f, 1.0f);
         break;
     }
     case QRhi::D3D12: {
@@ -137,8 +139,8 @@ bool MDKRhiContext::bindRenderAPI()
         D3D12RenderAPI ra{};
         ra.cmdQueue = reinterpret_cast<ID3D12CommandQueue *>(d3dnat->commandQueue);
         ra.rt = reinterpret_cast<ID3D12Resource *>(quintptr(texture->nativeTexture().object));
-        player->setRenderAPI(&ra);
-        player->scale(1.0f, 1.0f);
+        player.setRenderAPI(&ra);
+        player.scale(1.0f, 1.0f);
         break;
     }
 #endif
@@ -151,7 +153,7 @@ bool MDKRhiContext::bindRenderAPI()
         ra.opaque = this;
         ra.rt = VkImage(texture->nativeTexture().object);
         ra.renderTargetInfo = [](void *opaque, int *w, int *h, VkFormat *fmt, VkImageLayout *layout) {
-            auto *self = static_cast<MDKRhiContext *>(opaque);
+            auto *self = static_cast<MDKRhiRenderTarget *>(opaque);
             *w = self->size.width();
             *h = self->size.height();
             *fmt = VK_FORMAT_R8G8B8A8_UNORM;
@@ -159,8 +161,8 @@ bool MDKRhiContext::bindRenderAPI()
             return 1;
         };
         // Offscreen: MDK owns the command buffer when currentCommandBuffer is null.
-        player->setRenderAPI(&ra);
-        player->scale(1.0f, 1.0f);
+        player.setRenderAPI(&ra);
+        player.scale(1.0f, 1.0f);
         break;
     }
 #endif
@@ -168,13 +170,65 @@ bool MDKRhiContext::bindRenderAPI()
         return false;
     }
 
-    player->setVideoSurfaceSize(size.width(), size.height());
+    player.setVideoSurfaceSize(size.width(), size.height());
     apiBound = true;
     return true;
 }
 
+void MDKRhiContext::reset()
+{
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL
+    sharedTarget.reset();
+#endif
+}
+
+#if MDK_HAS_QT_RHI_TEXTURE_POOL
+MDKRhiFrameTextures::MDKRhiFrameTextures(std::unique_ptr<MDKRhiRenderTarget> target)
+    : target_(std::move(target))
+{
+}
+
+QRhiTexture *MDKRhiFrameTextures::texture(uint plane) const
+{
+    return plane == 0 && target_ ? target_->texture.get() : nullptr;
+}
+
+bool MDKRhiFrameTextures::usesRhi(const QRhi &rhi) const
+{
+    return target_ && target_->rhi == &rhi;
+}
+
+std::unique_ptr<MDKRhiRenderTarget> MDKRhiFrameTextures::takeRenderTarget()
+{
+    return std::move(target_);
+}
+
+std::unique_ptr<MDKRhiRenderTarget>
+mdkAcquireRhiRenderTarget(QRhi &rhi, QSize frameSize, QVideoFrameTexturesUPtr &oldTextures)
+{
+    std::unique_ptr<MDKRhiRenderTarget> target;
+    if (auto *old = dynamic_cast<MDKRhiFrameTextures *>(oldTextures.get())) {
+        // oldTextures belongs to the current QRhi frame slot. Reuse its allocation only when it
+        // was created by the same QRhi; other slots keep exclusive ownership of their textures.
+        if (old->usesRhi(rhi))
+            target = old->takeRenderTarget();
+    }
+
+    if (!target)
+        target = std::make_unique<MDKRhiRenderTarget>();
+    if (!target->ensure(rhi, frameSize))
+        return {};
+    return target;
+}
+#endif
+
 MDKRhiVideoBuffer::MDKRhiVideoBuffer(std::shared_ptr<MDKRhiContext> ctx, QSize size)
-    : QHwVideoBuffer(QVideoFrame::RhiTextureHandle, ctx ? ctx->rhi : nullptr)
+    : QHwVideoBuffer(QVideoFrame::RhiTextureHandle,
+#if MDK_HAS_QT_RHI_TEXTURE_POOL
+                     nullptr)
+#else
+                     ctx ? ctx->sharedTarget.rhi : nullptr)
+#endif
     , ctx_(std::move(ctx))
     , size_(size)
 {
@@ -187,24 +241,38 @@ QAbstractVideoBuffer::MapData MDKRhiVideoBuffer::map(QVideoFrame::MapMode)
     return {};
 }
 
-QVideoFrameTexturesUPtr MDKRhiVideoBuffer::mapTextures(QRhi &rhi, QVideoFrameTexturesUPtr &)
+QVideoFrameTexturesUPtr MDKRhiVideoBuffer::mapTextures(QRhi &rhi,
+                                                       QVideoFrameTexturesUPtr &oldTextures)
 {
     if (!ctx_ || !ctx_->player || size_.isEmpty())
         return {};
 
     std::lock_guard<std::mutex> lock(ctx_->mutex);
-    if (!ctx_->ensure(rhi, size_))
-        return {};
-
     // QHwVideoBuffer::rhi() should match the sink RHI used for mapping.
     m_rhi = &rhi;
 
+#if MDK_HAS_QT_RHI_TEXTURE_POOL
+    auto target = mdkAcquireRhiRenderTarget(rhi, size_, oldTextures);
+    if (!target)
+        return {};
+
+    // The player has one default renderer, while each Qt pool slot has a different target.
+    // Rebind before every draw so renderVideo() cannot overwrite another live frame's texture.
+    if (!target->bindRenderAPI(*ctx_->player))
+        return {};
+    ctx_->player->renderVideo();
+    return std::make_unique<MDKRhiFrameTextures>(std::move(target));
+#else
+    if (!ctx_->sharedTarget.ensure(rhi, size_))
+        return {};
+
     if (!rendered_) {
-        if (!ctx_->apiBound && !ctx_->bindRenderAPI())
+        if (!ctx_->sharedTarget.apiBound && !ctx_->sharedTarget.bindRenderAPI(*ctx_->player))
             return {};
         ctx_->player->renderVideo();
         rendered_ = true;
     }
 
     return std::make_unique<MDKFrameTextures>(ctx_);
+#endif
 }

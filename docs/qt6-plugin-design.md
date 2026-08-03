@@ -95,11 +95,11 @@ Active-track **getter** is cached in the plugin when the packaged SDK has no `Pl
 
 ## Video path
 
-Target: deliver frames into `QVideoSink` so Widgets and Qt Quick `VideoOutput` work without a custom RHI node.
+Target: deliver frames into `QVideoSink` through the presentation side's QRhi so Qt Quick `VideoOutput` and other RHI-based outputs work without a custom RHI node.
 
-When `QVideoSink::rhi()` is set (Qt Quick `VideoOutput`, RHI-based window), frames use **zero-copy QRhi textures**. Otherwise the plugin falls back to offscreen GL FBO readback.
+When `QVideoSink::rhi()` is set (for example, by Qt Quick `VideoOutput` or an RHI-based window), frames use **zero-copy QRhi textures**. The current implementation supports only the supported QRhi backends listed below; if no RHI is available or the backend is unsupported, no video frame is submitted because there is no CPU/FBO fallback.
 
-### QRhi path (preferred)
+### QRhi path (supported path)
 
 ```mermaid
 sequenceDiagram
@@ -126,27 +126,9 @@ Details ([`qt6/mdkrihiframe.*`](../qt6/mdkrihiframe.*), patterned on libmdk `exa
 3. There the plugin creates/resizes a `QRhiTexture` (RGBA8, RenderTarget), binds MDK `RenderAPI` (Metal / D3D11 / D3D12 / Vulkan / OpenGL FBO from `QGles2TextureRenderTarget`), and calls `renderVideo()`.
 4. Returned `QVideoFrameTextures` exposes that texture to Multimedia’s video node.
 
-`setRenderAPI` runs when the RT is (re)created, not every frame. Y-flip (`scale(1,-1)`) is applied for OpenGL only.
+When built with `-DMDK_USE_QT_RHI_TEXTURE_POOL=ON` against Qt 6.8.2 or later, the plugin uses the `oldTextures` handoff from Qt's internal `QVideoFrameTexturePool`. Each live RHI frame slot owns a separate texture/RT set, and a set is reused only after Qt returns that same slot. Because MDK has one default renderer, `setRenderAPI` is rebound before every pooled draw. The option defaults to `OFF`; when it is disabled or the Qt capability is unavailable, the legacy shared render target remains in use and `setRenderAPI` runs only when the target is (re)created. Y-flip (`scale(1,-1)`) is applied for OpenGL only.
 
-### CPU fallback
-
-```mermaid
-sequenceDiagram
-  participant MDK as mdk::Player
-  participant Ctrl as MDKPlayerControl
-  participant GL as Offscreen GL + FBO
-  participant Sink as QVideoSink
-
-  Ctrl->>MDK: setRenderCallback
-  MDK-->>Ctrl: onFrameAvailable queued
-  Ctrl->>GL: makeCurrent / ensure FBO
-  Note over Ctrl,GL: setRenderAPI only when FBO is created or resized
-  Ctrl->>MDK: renderVideo into FBO
-  Ctrl->>GL: toImage RGBA
-  Ctrl->>Sink: setVideoFrame QVideoFrame
-```
-
-Used when `sink->rhi()` is null (or RHI setup fails). Same FBO/`toImage` path as before.
+There is currently no CPU or offscreen-OpenGL fallback. A `QVideoSink` without a supported QRhi is therefore not a video output for this backend.
 
 `MDKVideoSink` remains a thin `QPlatformVideoSink`; RHI comes from `QVideoSink::rhi()` set by the presentation side.
 
@@ -170,9 +152,9 @@ Out-of-tree CMake ([`CMakeLists.txt`](CMakeLists.txt)):
 4. Install plugin to `${Qt}/plugins/multimedia/`.
 5. Install runtime via FindMDK variables:
    - `MDK_FRAMEWORK` → `${Qt}/lib/` (macOS), or
-   - `MDK_RUNTIMES` → `${Qt}/lib/` or `${Qt}/bin/` (Linux / Windows).
+   - `MDK_RUNTIMES` → `${Qt}/lib/` (Linux/other Unix) or `${Qt}/bin/` (Windows).
 
-Plugin `INSTALL_RPATH` is `@loader_path/../../lib`, matching other Qt multimedia plugins. **Without installing the MDK runtime into that lib directory, dyld/ELF fails to load the plugin and Qt falls back to another backend.**
+The installed plugin uses a platform-relative RPATH: `@loader_path/../../lib` on macOS and `$ORIGIN/../../lib` on Linux/other Unix targets. Windows does not use an ELF/macOS RPATH; its runtime files are installed next to the Qt binaries. **Without installing the MDK runtime into the corresponding Qt lib/bin directory, the platform loader fails to load the plugin and Qt falls back to another backend.**
 
 ## Qt5 vs Qt6 (contrast)
 
@@ -182,12 +164,12 @@ Plugin `INSTALL_RPATH` is `@loader_path/../../lib`, matching other Qt multimedia
 | Entry | `QMediaServiceProviderPlugin` | `QPlatformMediaPlugin` |
 | Selection | `QT_MULTIMEDIA_PREFERRED_PLUGINS` | `QT_MEDIA_BACKEND` |
 | Key | historically `mdkservice` | `mdk` |
-| Video to app | `QAbstractVideoSurface` / OpenGL widget | `QVideoSink` + QRhi (fallback FBO readback) |
+| Video to app | `QAbstractVideoSurface` / OpenGL widget | `QVideoSink` + supported QRhi |
 | Build | qmake | CMake + FindMDK |
 
 ## Limitations and future work
 
-- CPU FBO readback remains the fallback when no `QVideoSink` RHI is available.
+- No CPU/FBO fallback is provided when no supported `QVideoSink` RHI is available.
 - No capture/camera stack.
 - Packaged SDK gaps (commented or worked around in code): dedicated `onError`, `setAudioDevice` / `audioDevices`, `activeTracks` getter — use `onEvent`, `"audio.device"`, and a local track cache until SDK headers expose them.
 - Android multi-ABI library naming mismatch with Qt’s ABI-suffixed plugins remains an install concern.
