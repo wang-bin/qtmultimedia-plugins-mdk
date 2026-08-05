@@ -3,7 +3,7 @@
  * https://github.com/wang-bin/qtmultimedia-plugins-mdk
  * MIT License
  *
- * Shims for QPlatformMediaIntegration::create*() return types across Qt 6 minors.
+ * Shims for QPlatformMediaIntegration::create*() return types across supported Qt 6 minors.
  */
 #pragma once
 

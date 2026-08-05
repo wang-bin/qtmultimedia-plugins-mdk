@@ -1,13 +1,13 @@
 # Qt6 MDK Multimedia Plugin — Design
 
-This document describes the architecture of the **Qt 6.4+** MDK multimedia backend plugin (`mdkmediaplugin`). The Qt5 mediaservice plugin under [`qt5/`](qt5/) is a separate, older integration and is out of scope here.
+This document describes the architecture of the **Qt 6.8.0+** MDK multimedia backend plugin (`mdkmediaplugin`). The Qt5 mediaservice plugin under [`qt5/`](qt5/) is a separate, older integration and is out of scope here.
 
 ## Goals
 
 - Provide a **playback-only** Qt Multimedia backend powered by [mdk-sdk](https://github.com/wang-bin/mdk-sdk).
 - Selectable at runtime via `QT_MEDIA_BACKEND=mdk`.
 - Depend only on **public** MDK headers (`mdk/Player.h`, …) from a packaged SDK — not ABI/internal headers.
-- Survive Qt 6 private-API drift across minor versions (6.4 → 6.5 `QMaybe` → 6.10 `q23::expected`).
+- Survive Qt 6 private-API drift across the supported range (6.8.0–6.9 `QMaybe` → 6.10 `q23::expected`).
 
 Non-goals (v1): camera, capture session, recorder, screen/window capture.
 
@@ -61,9 +61,13 @@ These are not a stable public SDK; [`qt6/qtcompat.h`](qt6/qtcompat.h) isolates t
 
 | Qt version | Return type |
 |------------|-------------|
-| 6.4 | `T*` (`nullptr` = failure) |
-| 6.5–6.9 | `QMaybe<T*>` |
+| 6.8.0–6.9 | `QMaybe<T*>` |
 | ≥ 6.10 | `q23::expected<T*, QString>` |
+
+Qt 6.8.0 and 6.8.1 use the earlier
+`QHwVideoBuffer::mapTextures(QRhi *)` contract and the legacy shared render
+target. Qt 6.8.2 and later add the `oldTextures` handoff used by the optional
+texture-pool path.
 
 ## Playback control (`MDKPlayerControl`)
 
@@ -126,7 +130,7 @@ Details ([`qt6/mdkrihiframe.*`](../qt6/mdkrihiframe.*), patterned on libmdk `exa
 3. There the plugin creates/resizes a `QRhiTexture` (RGBA8, RenderTarget), binds MDK `RenderAPI` (Metal / D3D11 / D3D12 / Vulkan / OpenGL FBO from `QGles2TextureRenderTarget`), and calls `renderVideo()`.
 4. Returned `QVideoFrameTextures` exposes that texture to Multimedia’s video node.
 
-When built with `-DMDK_USE_QT_RHI_TEXTURE_POOL=ON` against Qt 6.8.2 or later, the plugin uses the `oldTextures` handoff from Qt's internal `QVideoFrameTexturePool`. Each live RHI frame slot owns a separate texture/RT set, and a set is reused only after Qt returns that same slot. Because MDK has one default renderer, `setRenderAPI` is rebound before every pooled draw. The option defaults to `OFF`; when it is disabled or the Qt capability is unavailable, the legacy shared render target remains in use and `setRenderAPI` runs only when the target is (re)created. Y-flip (`scale(1,-1)`) is applied for OpenGL only.
+When built with `-DMDK_USE_QT_RHI_TEXTURE_POOL=ON` against Qt 6.8.2 or later, the plugin uses the `oldTextures` handoff from Qt's internal `QVideoFrameTexturePool`. Each live RHI frame slot owns a separate texture/RT set, and a set is reused only after Qt returns that same slot. Because MDK has one default renderer, `setRenderAPI` is rebound before every pooled draw. The option defaults to `OFF`; on Qt 6.8.0/6.8.1, or when the option/capability is unavailable, the legacy shared render target remains in use and `setRenderAPI` runs only when the target is (re)created. Y-flip (`scale(1,-1)`) is applied for OpenGL only.
 
 There is currently no CPU or offscreen-OpenGL fallback. A `QVideoSink` without a supported QRhi is therefore not a video output for this backend.
 
@@ -146,7 +150,7 @@ Qt continues to enumerate devices for the UI; id formats may differ by OS/backen
 
 Out-of-tree CMake ([`CMakeLists.txt`](CMakeLists.txt)):
 
-1. `find_package(Qt6 … MultimediaPrivate)`.
+1. `find_package(Qt6 6.8.0 REQUIRED … MultimediaPrivate)`; the CMake project rejects older Qt 6 versions.
 2. `MDK_SDK` default `./mdk-sdk`; `include(${MDK_SDK}/lib/cmake/FindMDK.cmake)`.
 3. `qt_add_plugin(… PLUGIN_TYPE multimedia)` + `target_link_libraries(… mdk)`.
 4. Install plugin to `${Qt}/plugins/multimedia/`.

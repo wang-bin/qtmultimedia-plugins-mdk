@@ -7,12 +7,18 @@ option(BUILD_TESTING "Build tests" OFF)
 option(MDK_USE_QT_RHI_TEXTURE_POOL
     "Use Qt 6.8.2+ QVideoFrameTexturePool for independent RHI frame slots" OFF)
 
+# Qt 6.8.0 introduced QHwVideoBuffer. Qt 6.8.2 adds the oldTextures handoff
+# used by the optional QVideoFrameTexturePool path, while 6.8.0/6.8.1 use the
+# pointer-only mapTextures() compatibility branch.
+set(MDK_MIN_QT_VERSION 6.8.0)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui GuiPrivate Multimedia OpenGL MultimediaPrivate)
+find_package(Qt6 ${MDK_MIN_QT_VERSION} REQUIRED COMPONENTS
+    Core Gui GuiPrivate Multimedia OpenGL MultimediaPrivate)
 
 # MDK_SDK defaults to ./mdk-sdk in the project root
 if(NOT MDK_SDK)
@@ -146,6 +152,7 @@ elseif(MDK_RUNTIMES)
 endif()
 
 message(STATUS "Qt6: ${Qt6_DIR}")
+message(STATUS "Qt6 minimum version: ${MDK_MIN_QT_VERSION}")
 message(STATUS "MDK_SDK=${MDK_SDK}")
 message(STATUS "MDK_FRAMEWORK=${MDK_FRAMEWORK}")
 message(STATUS "MDK_RUNTIMES=${MDK_RUNTIMES}")

@@ -96,7 +96,13 @@ public:
     MapData map(QVideoFrame::MapMode mode) override;
     void unmap() override {}
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
+    // Qt 6.8.2 added the oldTextures handoff used by QVideoFrameTexturePool.
     QVideoFrameTexturesUPtr mapTextures(QRhi &rhi, QVideoFrameTexturesUPtr &oldTextures) override;
+#else
+    // Qt 6.8.0 and 6.8.1 use the earlier pointer-only mapTextures() contract.
+    std::unique_ptr<QVideoFrameTextures> mapTextures(QRhi *rhi) override;
+#endif
 
 private:
     std::shared_ptr<MDKRhiContext> ctx_;
