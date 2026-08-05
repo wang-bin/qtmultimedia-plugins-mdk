@@ -5,7 +5,13 @@
  */
 #pragma once
 
-#include <QtMultimedia/private/qhwvideobuffer_p.h>
+#include <QtCore/qglobal.h>
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+#  include <QtMultimedia/private/qhwvideobuffer_p.h>
+#else
+#  include <QtMultimedia/private/qabstractvideobuffer_p.h>
+#endif
 
 #include <rhi/qrhi.h>
 
@@ -32,7 +38,7 @@ MDK_NS_END
 
 /*!
  * QRhi resources used as one MDK render target. Creation and rendering happen on the QRhi thread
- * through QHwVideoBuffer::mapTextures().
+ * through the Qt version's private video-buffer mapTextures() callback.
  */
 struct MDKRhiRenderTarget
 {
@@ -87,7 +93,15 @@ std::unique_ptr<MDKRhiRenderTarget>
 mdkAcquireRhiRenderTarget(QRhi &rhi, QSize frameSize, QVideoFrameTexturesUPtr &oldTextures);
 #endif
 
-class MDKRhiVideoBuffer final : public QHwVideoBuffer
+// QHwVideoBuffer was introduced in Qt 6.8. Older supported Qt releases expose
+// the same RHI texture callback on QAbstractVideoBuffer instead.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+using MDKVideoBufferBase = QHwVideoBuffer;
+#else
+using MDKVideoBufferBase = QAbstractVideoBuffer;
+#endif
+
+class MDKRhiVideoBuffer final : public MDKVideoBufferBase
 {
 public:
     MDKRhiVideoBuffer(std::shared_ptr<MDKRhiContext> ctx, QSize size);
@@ -95,12 +109,17 @@ public:
 
     MapData map(QVideoFrame::MapMode mode) override;
     void unmap() override {}
+#if QT_VERSION < QT_VERSION_CHECK(6, 7, 2)
+    // Qt 6.5 through 6.7.1 still require mapMode() for every
+    // QAbstractVideoBuffer; this RHI-only buffer never exposes a CPU mapping.
+    QVideoFrame::MapMode mapMode() const override { return QVideoFrame::NotMapped; }
+#endif
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
     // Qt 6.8.2 added the oldTextures handoff used by QVideoFrameTexturePool.
     QVideoFrameTexturesUPtr mapTextures(QRhi &rhi, QVideoFrameTexturesUPtr &oldTextures) override;
 #else
-    // Qt 6.8.0 and 6.8.1 use the earlier pointer-only mapTextures() contract.
+    // Qt versions before 6.8.2 use the earlier pointer-only mapTextures() contract.
     std::unique_ptr<QVideoFrameTextures> mapTextures(QRhi *rhi) override;
 #endif
 

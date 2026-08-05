@@ -223,11 +223,16 @@ mdkAcquireRhiRenderTarget(QRhi &rhi, QSize frameSize, QVideoFrameTexturesUPtr &o
 #endif
 
 MDKRhiVideoBuffer::MDKRhiVideoBuffer(std::shared_ptr<MDKRhiContext> ctx, QSize size)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     : QHwVideoBuffer(QVideoFrame::RhiTextureHandle,
 #if MDK_HAS_QT_RHI_TEXTURE_POOL
                      nullptr)
 #else
                      ctx ? ctx->sharedTarget.rhi : nullptr)
+#endif
+#else
+    : QAbstractVideoBuffer(QVideoFrame::RhiTextureHandle,
+                           ctx ? ctx->sharedTarget.rhi : nullptr)
 #endif
     , ctx_(std::move(ctx))
     , size_(size)
@@ -256,7 +261,7 @@ std::unique_ptr<QVideoFrameTextures> MDKRhiVideoBuffer::mapTextures(QRhi *rhi)
         return {};
 
     std::lock_guard<std::mutex> lock(ctx_->mutex);
-    // QHwVideoBuffer::rhi() should match the sink RHI used for mapping.
+    // Keep the base buffer's RHI in sync with the sink RHI used for mapping.
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
     m_rhi = &rhi;
 #else
@@ -276,7 +281,7 @@ std::unique_ptr<QVideoFrameTextures> MDKRhiVideoBuffer::mapTextures(QRhi *rhi)
     ctx_->player->renderVideo();
     return std::make_unique<MDKRhiFrameTextures>(std::move(target));
 #else
-    // Qt 6.8.0/6.8.1 have no oldTextures argument, so they use the legacy shared target.
+    // Qt versions before 6.8.2 have no oldTextures argument, so they use the legacy shared target.
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
     QRhi &mappedRhi = rhi;
 #endif

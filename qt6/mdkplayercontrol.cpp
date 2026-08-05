@@ -10,7 +10,9 @@
 #include "mdk/global.h"
 
 #include <QtMultimedia/private/qplatformaudiooutput_p.h>
-#include <QtMultimedia/private/qvideoframe_p.h>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+#  include <QtMultimedia/private/qvideoframe_p.h>
+#endif
 #include <QtMultimedia/qaudiooutput.h>
 #include <QtMultimedia/qmediaplayer.h>
 #include <QtMultimedia/qvideoframe.h>
@@ -648,5 +650,11 @@ void MDKPlayerControl::onFrameAvailable()
 
     QVideoFrameFormat format(QSize(video_w_, video_h_), QVideoFrameFormat::Format_RGBA8888);
     auto buffer = std::make_unique<MDKRhiVideoBuffer>(rhiCtx_, format.frameSize());
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     sink_->setVideoFrame(QVideoFramePrivate::createFrame(std::move(buffer), std::move(format)));
+#else
+    // Qt 6.5-6.7 do not expose QVideoFramePrivate::createFrame(); the internal
+    // raw-pointer constructor takes ownership of the released buffer.
+    sink_->setVideoFrame(QVideoFrame(buffer.release(), format));
+#endif
 }
