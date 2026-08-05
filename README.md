@@ -1,7 +1,7 @@
 # qtmultimedia-plugins-mdk
 qt multimedia plugins implemented on top of [mdk-sdk](https://github.com/wang-bin/mdk-sdk)
 
-Supports **Qt 5** (mediaservice plugin) and **Qt 6.5+** (multimedia plugin).
+Supports **Qt 5** (mediaservice plugin) and **Qt 6.4+** (multimedia plugin).
 
 Qt6 architecture and data flow: [docs/qt6-plugin-design.md](docs/qt6-plugin-design.md).
 
@@ -21,7 +21,7 @@ Qt6 architecture and data flow: [docs/qt6-plugin-design.md](docs/qt6-plugin-desi
 
 ## Build Qt6 (CMake)
 
-Requires Qt **6.5+**. Uses [mdk-sdk](https://github.com/wang-bin/mdk-sdk) via `FindMDK.cmake` (`target_link_libraries(... mdk)`).
+Requires Qt **6.4+**. Uses [mdk-sdk](https://github.com/wang-bin/mdk-sdk) via `FindMDK.cmake` (`target_link_libraries(... mdk)`).
 
 ```bash
 # Extract or symlink mdk-sdk into this directory (default MDK_SDK=./mdk-sdk), then:
@@ -34,7 +34,7 @@ On macOS, `cmake --install` copies `mdk.framework` into Qt's `lib/` so the plugi
 
 Optional: `-DMDK_SDK=/path/to/mdk-sdk` if the SDK is not at `./mdk-sdk`.
 
-Optional: `-DMDK_USE_QT_RHI_TEXTURE_POOL=ON` enables independent Qt RHI frame-slot textures with Qt 6.8.2 or later. It defaults to `OFF`; Qt 6.5 through 6.8.1 use the legacy shared-target path.
+Optional: `-DMDK_USE_QT_RHI_TEXTURE_POOL=ON` enables independent Qt RHI frame-slot textures with Qt 6.8.2 or later. It defaults to `OFF`; Qt 6.4 through 6.8.1 use the legacy shared-target path.
 
 Enable: `export QT_MEDIA_BACKEND=mdk` and run a Qt Multimedia example.
 

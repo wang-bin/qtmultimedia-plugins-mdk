@@ -649,7 +649,7 @@ void MDKPlayerControl::onFrameAvailable()
     }
 
     QVideoFrameFormat format(QSize(video_w_, video_h_), QVideoFrameFormat::Format_RGBA8888);
-    auto buffer = std::make_unique<MDKRhiVideoBuffer>(rhiCtx_, format.frameSize());
+    auto buffer = std::make_unique<MDKRhiVideoBuffer>(rhiCtx_, format.frameSize(), rhi);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     sink_->setVideoFrame(QVideoFramePrivate::createFrame(std::move(buffer), std::move(format)));
 #else

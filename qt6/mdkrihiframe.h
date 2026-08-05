@@ -61,7 +61,7 @@ struct MDKRhiRenderTarget
 struct MDKRhiContext
 {
     MDK_NS::Player *player = nullptr;
-    std::mutex mutex;
+    mutable std::mutex mutex;
 #if !MDK_HAS_QT_RHI_TEXTURE_POOL
     MDKRhiRenderTarget sharedTarget;
 #endif
@@ -104,7 +104,7 @@ using MDKVideoBufferBase = QAbstractVideoBuffer;
 class MDKRhiVideoBuffer final : public MDKVideoBufferBase
 {
 public:
-    MDKRhiVideoBuffer(std::shared_ptr<MDKRhiContext> ctx, QSize size);
+    MDKRhiVideoBuffer(std::shared_ptr<MDKRhiContext> ctx, QSize size, QRhi *rhi);
     ~MDKRhiVideoBuffer() override;
 
     MapData map(QVideoFrame::MapMode mode) override;
@@ -118,15 +118,25 @@ public:
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
     // Qt 6.8.2 added the oldTextures handoff used by QVideoFrameTexturePool.
     QVideoFrameTexturesUPtr mapTextures(QRhi &rhi, QVideoFrameTexturesUPtr &oldTextures) override;
-#else
+#elif QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     // Qt versions before 6.8.2 use the earlier pointer-only mapTextures() contract.
     std::unique_ptr<QVideoFrameTextures> mapTextures(QRhi *rhi) override;
+#else
+    // Qt 6.4 has no QVideoFrameTextures wrapper; Qt asks for a native texture handle instead.
+    void mapTextures() override;
+    quint64 textureHandle(int plane) const override;
 #endif
 
 private:
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL
+    bool renderSharedTarget(QRhi &rhi);
+#endif
     std::shared_ptr<MDKRhiContext> ctx_;
     QSize size_;
 #if !MDK_HAS_QT_RHI_TEXTURE_POOL
     bool rendered_ = false;
+#endif
+#if QT_VERSION < QT_VERSION_CHECK(6, 5, 0)
+    bool textureReady_ = false;
 #endif
 };

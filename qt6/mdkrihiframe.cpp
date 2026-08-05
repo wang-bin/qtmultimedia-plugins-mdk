@@ -24,7 +24,7 @@
 
 using namespace MDK_NS;
 
-#if !MDK_HAS_QT_RHI_TEXTURE_POOL
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL && QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
 namespace {
 
 class MDKFrameTextures final : public QVideoFrameTextures
@@ -222,17 +222,17 @@ mdkAcquireRhiRenderTarget(QRhi &rhi, QSize frameSize, QVideoFrameTexturesUPtr &o
 }
 #endif
 
-MDKRhiVideoBuffer::MDKRhiVideoBuffer(std::shared_ptr<MDKRhiContext> ctx, QSize size)
+MDKRhiVideoBuffer::MDKRhiVideoBuffer(std::shared_ptr<MDKRhiContext> ctx, QSize size, QRhi *rhi)
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     : QHwVideoBuffer(QVideoFrame::RhiTextureHandle,
 #if MDK_HAS_QT_RHI_TEXTURE_POOL
                      nullptr)
 #else
-                     ctx ? ctx->sharedTarget.rhi : nullptr)
+                     rhi)
 #endif
 #else
     : QAbstractVideoBuffer(QVideoFrame::RhiTextureHandle,
-                           ctx ? ctx->sharedTarget.rhi : nullptr)
+                           rhi)
 #endif
     , ctx_(std::move(ctx))
     , size_(size)
@@ -246,30 +246,40 @@ QAbstractVideoBuffer::MapData MDKRhiVideoBuffer::map(QVideoFrame::MapMode)
     return {};
 }
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
-QVideoFrameTexturesUPtr MDKRhiVideoBuffer::mapTextures(QRhi &rhi,
-                                                       QVideoFrameTexturesUPtr &oldTextures)
-#else
-std::unique_ptr<QVideoFrameTextures> MDKRhiVideoBuffer::mapTextures(QRhi *rhi)
-#endif
+#if !MDK_HAS_QT_RHI_TEXTURE_POOL
+bool MDKRhiVideoBuffer::renderSharedTarget(QRhi &rhi)
 {
-    if (!ctx_ || !ctx_->player || size_.isEmpty()
-#if QT_VERSION < QT_VERSION_CHECK(6, 8, 2)
-            || !rhi
-#endif
-    )
-        return {};
+    if (!ctx_ || !ctx_->player || size_.isEmpty())
+        return false;
 
     std::lock_guard<std::mutex> lock(ctx_->mutex);
     // Keep the base buffer's RHI in sync with the sink RHI used for mapping.
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
     m_rhi = &rhi;
-#else
-    m_rhi = rhi;
-    QRhi &mappedRhi = *rhi;
+    if (!ctx_->sharedTarget.ensure(rhi, size_))
+        return false;
+
+    if (!rendered_) {
+        if (!ctx_->sharedTarget.apiBound && !ctx_->sharedTarget.bindRenderAPI(*ctx_->player))
+            return false;
+        ctx_->player->renderVideo();
+        rendered_ = true;
+    }
+
+    return true;
+}
 #endif
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
+QVideoFrameTexturesUPtr MDKRhiVideoBuffer::mapTextures(QRhi &rhi,
+                                                       QVideoFrameTexturesUPtr &oldTextures)
+{
+    if (!ctx_ || !ctx_->player || size_.isEmpty())
+        return {};
+
 #if MDK_HAS_QT_RHI_TEXTURE_POOL
+    std::lock_guard<std::mutex> lock(ctx_->mutex);
+    m_rhi = &rhi;
+
     auto target = mdkAcquireRhiRenderTarget(rhi, size_, oldTextures);
     if (!target)
         return {};
@@ -281,20 +291,38 @@ std::unique_ptr<QVideoFrameTextures> MDKRhiVideoBuffer::mapTextures(QRhi *rhi)
     ctx_->player->renderVideo();
     return std::make_unique<MDKRhiFrameTextures>(std::move(target));
 #else
-    // Qt versions before 6.8.2 have no oldTextures argument, so they use the legacy shared target.
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 2)
-    QRhi &mappedRhi = rhi;
-#endif
-    if (!ctx_->sharedTarget.ensure(mappedRhi, size_))
+    if (!renderSharedTarget(rhi))
         return {};
-
-    if (!rendered_) {
-        if (!ctx_->sharedTarget.apiBound && !ctx_->sharedTarget.bindRenderAPI(*ctx_->player))
-            return {};
-        ctx_->player->renderVideo();
-        rendered_ = true;
-    }
-
     return std::make_unique<MDKFrameTextures>(ctx_);
 #endif
 }
+#elif QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+std::unique_ptr<QVideoFrameTextures> MDKRhiVideoBuffer::mapTextures(QRhi *rhi)
+{
+    if (!rhi || !renderSharedTarget(*rhi))
+        return {};
+
+    return std::make_unique<MDKFrameTextures>(ctx_);
+}
+#else
+void MDKRhiVideoBuffer::mapTextures()
+{
+    // Qt 6.4 does not pass QRhi to mapTextures(), so the frame captures it when created.
+    textureReady_ = false;
+    if (QRhi *rhi = this->rhi())
+        textureReady_ = renderSharedTarget(*rhi);
+}
+
+quint64 MDKRhiVideoBuffer::textureHandle(int plane) const
+{
+    if (plane != 0 || !ctx_ || !textureReady_)
+        return 0;
+
+    std::lock_guard<std::mutex> lock(ctx_->mutex);
+    if (!ctx_->sharedTarget.texture)
+        return 0;
+    // Qt 6.4 wraps this native object into a QRhiTexture after mapTextures(); the
+    // frame keeps sharedTarget alive for the lifetime of that wrapper.
+    return quint64(ctx_->sharedTarget.texture->nativeTexture().object);
+}
+#endif

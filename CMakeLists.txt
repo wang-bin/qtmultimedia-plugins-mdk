@@ -7,10 +7,10 @@ option(BUILD_TESTING "Build tests" OFF)
 option(MDK_USE_QT_RHI_TEXTURE_POOL
     "Use Qt 6.8.2+ QVideoFrameTexturePool for independent RHI frame slots" OFF)
 
-# Qt 6.5 introduced the QAbstractVideoBuffer::mapTextures(QRhi *) path used by
-# this plugin. Qt 6.8.0 adds QHwVideoBuffer, and Qt 6.8.2 adds oldTextures for
-# the optional QVideoFrameTexturePool path.
-set(MDK_MIN_QT_VERSION 6.5.0)
+# Qt 6.4 provides the legacy QAbstractVideoBuffer::mapTextures() and
+# textureHandle() path. Qt 6.5 adds QVideoFrameTextures, Qt 6.8.0 adds
+# QHwVideoBuffer, and Qt 6.8.2 adds oldTextures for the optional pool path.
+set(MDK_MIN_QT_VERSION 6.4.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
